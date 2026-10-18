@@ -1,0 +1,476 @@
+{
+  "version": 1,
+  "meta": {
+    "rev": "initial",
+    "updatedAt": "2026-10-18T14:28:53.940Z"
+  },
+  "site": {
+    "name": "Ali Yasavul",
+    "url": "https://aliyasavul.com",
+    "defaultLang": "auto",
+    "title": {
+      "tr": "Ali Yasavul | Elektro Gitarist · Gitar Dersi · Session",
+      "en": "Ali Yasavul | Electric Guitarist · Lessons · Session"
+    },
+    "description": {
+      "tr": "Ali Yasavul ile birebir elektro gitar dersleri, session gitaristlik, kayıt ve aranje.",
+      "en": "One-on-one electric guitar lessons, session guitar, recording and arrangement with Ali Yasavul."
+    },
+    "shareImage": "/assets/share.jpg"
+  },
+  "theme": {
+    "preset": "amber",
+    "fonts": {
+      "display": "Barlow Condensed",
+      "body": "Barlow",
+      "mono": "IBM Plex Mono"
+    },
+    "colors": {
+      "background": "#000000",
+      "text": "#ece4d6",
+      "muted": "#a59b8a",
+      "accent": "#e9a14b",
+      "accentText": "#0a0705",
+      "line": "#ece4d6",
+      "panel": "#050403",
+      "bannerBackground": "#e9a14b",
+      "bannerText": "#0a0705",
+      "logo": "#f2efe8",
+      "glow": "#ffa03c"
+    },
+    "effects": {
+      "glitch": 50,
+      "glow": 50,
+      "spin": 50,
+      "parallax": 50
+    }
+  },
+  "media": {
+    "logo": {
+      "src": "/assets/logo-white.webp",
+      "width": 1926,
+      "height": 816
+    },
+    "stone": {
+      "mp4": "/assets/amber.mp4",
+      "mp4Small": "/assets/amber-480.mp4",
+      "webm": "/assets/amber.webm",
+      "poster": "/assets/amber-poster.jpg"
+    }
+  },
+  "audio": {
+    "src": "",
+    "title": {
+      "tr": "Ambiyans",
+      "en": "Ambient drone"
+    },
+    "volume": 70
+  },
+  "gate": {
+    "tagline": {
+      "tr": "Elektro gitar · Ders · Session · Kayıt · Aranje",
+      "en": "Electric guitar · Lessons · Session · Recording · Arrangement"
+    },
+    "start": {
+      "tr": "Başlamak için tıkla",
+      "en": "Click to start"
+    },
+    "note": {
+      "tr": "Ses açık",
+      "en": "Sound on"
+    },
+    "quiet": {
+      "tr": "Sessiz gir",
+      "en": "Enter without sound"
+    }
+  },
+  "header": {
+    "cta": {
+      "label": {
+        "tr": "Ders al",
+        "en": "Book a lesson"
+      },
+      "target": "lessons"
+    }
+  },
+  "banner": {
+    "enabled": false,
+    "text": {
+      "tr": "Kasım için 2 öğrenci yeri kaldı.",
+      "en": "2 student spots left for November."
+    },
+    "linkLabel": {
+      "tr": "Yer ayırt",
+      "en": "Save a spot"
+    },
+    "link": ""
+  },
+  "intro": {
+    "nav": {
+      "tr": "Giriş",
+      "en": "Intro"
+    },
+    "era": {
+      "tr": "Bugün",
+      "en": "Today"
+    },
+    "stamp": "0"
+  },
+  "sections": [
+    {
+      "id": "about",
+      "enabled": true,
+      "stamp": "23",
+      "nav": {
+        "tr": "Hakkımda",
+        "en": "About"
+      },
+      "era": {
+        "tr": "23 milyon yıl önce · Miyosen",
+        "en": "23 million years ago · Miocene"
+      },
+      "title": {
+        "tr": "Hakkımda",
+        "en": "About"
+      },
+      "body": {
+        "tr": "[Kısa biyografin: kaç yıldır çaldığın, sevdiğin tarzlar ve birlikte çaldığın gruplar ya da sanatçılar.]",
+        "en": "[Your short bio: how long you have been playing, the styles you love, and the bands or artists you have played with.]"
+      },
+      "facts": [
+        {
+          "k": {
+            "tr": "Enstrüman",
+            "en": "Instrument"
+          },
+          "v": {
+            "tr": "Elektro gitar",
+            "en": "Electric guitar"
+          }
+        },
+        {
+          "k": {
+            "tr": "Deneyim",
+            "en": "Playing for"
+          },
+          "v": {
+            "tr": "[X] yıl",
+            "en": "[X] years"
+          }
+        },
+        {
+          "k": {
+            "tr": "Tarzlar",
+            "en": "Styles"
+          },
+          "v": {
+            "tr": "[Tarzların]",
+            "en": "[Your styles]"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lessons",
+      "enabled": true,
+      "stamp": "34",
+      "nav": {
+        "tr": "Dersler",
+        "en": "Lessons"
+      },
+      "era": {
+        "tr": "34 milyon yıl önce · Oligosen",
+        "en": "34 million years ago · Oligocene"
+      },
+      "title": {
+        "tr": "Gitar dersleri",
+        "en": "Guitar lessons"
+      },
+      "body": {
+        "tr": "Birebir elektro gitar dersleri: teknik, teori, ton ve gerçekten çalmak istediğin şarkılar.",
+        "en": "One-on-one electric guitar lessons: technique, theory, tone and the songs you actually want to play."
+      },
+      "facts": [
+        {
+          "k": {
+            "tr": "Nerede",
+            "en": "Where"
+          },
+          "v": {
+            "tr": "Online ya da yüz yüze, [şehrin]",
+            "en": "Online or in person, [your city]"
+          }
+        },
+        {
+          "k": {
+            "tr": "Seviye",
+            "en": "Level"
+          },
+          "v": {
+            "tr": "Başlangıçtan ileri seviyeye",
+            "en": "Beginner to advanced"
+          }
+        }
+      ],
+      "packages": [
+        {
+          "name": {
+            "tr": "Tek ders",
+            "en": "Single lesson"
+          },
+          "price": {
+            "tr": "[Fiyat]",
+            "en": "[Price]"
+          },
+          "details": {
+            "tr": "60 dakika",
+            "en": "60 minutes"
+          }
+        },
+        {
+          "name": {
+            "tr": "4 derslik paket",
+            "en": "4-lesson pack"
+          },
+          "price": {
+            "tr": "[Fiyat]",
+            "en": "[Price]"
+          },
+          "details": {
+            "tr": "Haftada bir, 60 dakika",
+            "en": "Once a week, 60 minutes"
+          }
+        }
+      ],
+      "cta": {
+        "label": {
+          "tr": "Ders ayarla",
+          "en": "Book a lesson"
+        },
+        "target": "contact"
+      }
+    },
+    {
+      "id": "work",
+      "enabled": true,
+      "stamp": "56",
+      "nav": {
+        "tr": "Portfolyo",
+        "en": "Work"
+      },
+      "era": {
+        "tr": "56 milyon yıl önce · Eosen",
+        "en": "56 million years ago · Eocene"
+      },
+      "title": {
+        "tr": "Portfolyo",
+        "en": "Work"
+      },
+      "body": {
+        "tr": "Session gitar, kayıt ve aranje. Şarkın için doğru partisyonu birlikte bulalım.",
+        "en": "Session guitar, recording and arrangement. Let's find the right part for your song."
+      },
+      "services": [
+        {
+          "name": {
+            "tr": "Session gitar",
+            "en": "Session guitar"
+          },
+          "desc": {
+            "tr": "Şarkıların ve kayıtların için gitar partisyonları",
+            "en": "Parts for your songs and records"
+          }
+        },
+        {
+          "name": {
+            "tr": "Kayıt",
+            "en": "Recording"
+          },
+          "desc": {
+            "tr": "Ritim, lead, solo ve dokular",
+            "en": "Rhythm, leads, solos and textures"
+          }
+        },
+        {
+          "name": {
+            "tr": "Aranje",
+            "en": "Arrangement"
+          },
+          "desc": {
+            "tr": "Şarkıya göre yazılmış gitar partisyonları",
+            "en": "Guitar parts written for the song"
+          }
+        }
+      ],
+      "videos": []
+    },
+    {
+      "id": "gallery",
+      "enabled": true,
+      "stamp": "66",
+      "nav": {
+        "tr": "Galeri",
+        "en": "Gallery"
+      },
+      "era": {
+        "tr": "66 milyon yıl önce · Kretase'nin sonu",
+        "en": "66 million years ago · End of the Cretaceous"
+      },
+      "title": {
+        "tr": "Galeri",
+        "en": "Gallery"
+      },
+      "body": {
+        "tr": "",
+        "en": ""
+      },
+      "images": [],
+      "instagram": {
+        "enabled": false,
+        "profile": "",
+        "feedUrl": "",
+        "count": 6,
+        "label": {
+          "tr": "Instagram'da takip et",
+          "en": "Follow on Instagram"
+        }
+      }
+    },
+    {
+      "id": "contact",
+      "enabled": true,
+      "stamp": "99 MA",
+      "nav": {
+        "tr": "İletişim",
+        "en": "Contact"
+      },
+      "era": {
+        "tr": "99 milyon yıl önce · Kehribardaki dinozor kuyruğu",
+        "en": "99 million years ago · The dinosaur tail in amber"
+      },
+      "title": {
+        "tr": "İletişim",
+        "en": "Contact"
+      },
+      "body": {
+        "tr": "Ders, session ya da aranje: neye ihtiyacın olduğunu yaz, sana dönüş yapayım.",
+        "en": "Lessons, a session or an arrangement: tell me what you need and I will get back to you."
+      },
+      "email": "iletisim@aliyasavul.com",
+      "whatsapp": {
+        "number": "",
+        "message": {
+          "tr": "Merhaba Ali, ders hakkında bilgi almak istiyorum.",
+          "en": "Hi Ali, I'd like to ask about lessons."
+        }
+      },
+      "booking": {
+        "url": "",
+        "label": {
+          "tr": "Takvimden gün seç",
+          "en": "Pick a time"
+        }
+      },
+      "links": [
+        {
+          "label": "Instagram",
+          "url": ""
+        },
+        {
+          "label": "YouTube",
+          "url": ""
+        },
+        {
+          "label": "Spotify",
+          "url": ""
+        }
+      ]
+    }
+  ],
+  "strings": {
+    "soundOff": {
+      "tr": "Ses kapalı",
+      "en": "Sound off"
+    },
+    "nowPlaying": {
+      "tr": "Çalıyor",
+      "en": "Now playing"
+    },
+    "soundOn": {
+      "tr": "Sesi aç",
+      "en": "Sound on"
+    },
+    "soundMute": {
+      "tr": "Sesi kapat",
+      "en": "Sound off"
+    },
+    "dragHint": {
+      "tr": "Kehribarı çevirmek için sürükle",
+      "en": "Drag to turn the amber"
+    },
+    "copy": {
+      "tr": "Kopyala",
+      "en": "Copy"
+    },
+    "copied": {
+      "tr": "Kopyalandı",
+      "en": "Copied"
+    },
+    "selected": {
+      "tr": "Seçildi",
+      "en": "Selected"
+    },
+    "email": {
+      "tr": "E-posta",
+      "en": "Email"
+    },
+    "whatsapp": {
+      "tr": "WhatsApp'tan yaz",
+      "en": "Message on WhatsApp"
+    },
+    "watch": {
+      "tr": "İzle",
+      "en": "Watch"
+    },
+    "close": {
+      "tr": "Kapat",
+      "en": "Close"
+    },
+    "prev": {
+      "tr": "Önceki",
+      "en": "Previous"
+    },
+    "next": {
+      "tr": "Sonraki",
+      "en": "Next"
+    },
+    "backToStart": {
+      "tr": "Ali Yasavul, başa dön",
+      "en": "Ali Yasavul, back to the start"
+    },
+    "sections": {
+      "tr": "Bölümler, milyon yıl önce cinsinden bir jeolojik zaman çizelgesinde",
+      "en": "Sections, set on a geological timeline in millions of years ago"
+    },
+    "stoneLabel": {
+      "tr": "İçeriden aydınlanan, yavaşça dönen ham bir kehribar parçası. Çevirmek için sürükle.",
+      "en": "A raw piece of amber lit from inside, turning slowly. Drag to turn it."
+    },
+    "language": {
+      "tr": "Dil",
+      "en": "Language"
+    },
+    "switchTo": {
+      "tr": "Switch to English",
+      "en": "Türkçe'ye geç"
+    },
+    "instagram": {
+      "tr": "Instagram",
+      "en": "Instagram"
+    },
+    "dismiss": {
+      "tr": "Duyuruyu kapat",
+      "en": "Dismiss announcement"
+    }
+  }
+}

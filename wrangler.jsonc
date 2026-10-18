@@ -1,0 +1,26 @@
+{
+  // aliyasavul.com on Cloudflare Workers: static site in dist/ + the small admin API in src/worker.js
+  "name": "aliyasavul-site",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "build": {
+    // pre-renders the pages from content/site.json into dist/
+    "command": "node scripts/build.mjs"
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "SITE_ORIGIN": "https://aliyasavul.com",
+    "REPO_OWNER": "aliyasavul",
+    "REPO_NAME": "aliyasavul-site",
+    "REPO_BRANCH": "main"
+  },
+  // keeps the secrets and variables you add in the Cloudflare dashboard
+  "keep_vars": true,
+  "observability": { "enabled": true }
+}
