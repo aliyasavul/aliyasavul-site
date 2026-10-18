@@ -1000,7 +1000,7 @@ function tabContact() {
   const p = 'sections.@contact';
   return [hiddenNote('contact'),
     group('Başlık ve yazı', null, fBi(p + '.title', 'Başlık'), fBi(p + '.body', 'Yazı', { multiline: true, rows: 4, hint: bodyHint })),
-    group('E-posta', 'Yanında “Kopyala” düğmesi olur.', fText(p + '.email', 'E-posta adresin', { type: 'email', placeholder: 'iletisim@aliyasavul.com' })),
+    group('E-posta', 'Yanında “Kopyala” düğmesi olur.', fText(p + '.email', 'E-posta adresin', { type: 'email', placeholder: 'info@aliyasavul.com' })),
     group('WhatsApp', 'Numara yazarsan “WhatsApp’tan yaz” düğmesi çıkar ve hazır mesajla açılır.',
       fText(p + '.whatsapp.number', 'Telefon numaran', { type: 'tel', inputmode: 'tel', placeholder: '0532 123 45 67', hint: 'Başında 0 ile ya da 90 ile yazabilirsin.' }),
       fBi(p + '.whatsapp.message', 'Hazır mesaj', { multiline: true, rows: 2 })),

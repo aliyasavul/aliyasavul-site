@@ -178,7 +178,7 @@ export const DEFAULTS = {
         'Ders, session ya da aranje: neye ihtiyacın olduğunu yaz, sana dönüş yapayım.',
         'Lessons, a session or an arrangement: tell me what you need and I will get back to you.'
       ),
-      email: 'iletisim@aliyasavul.com',
+      email: 'info@aliyasavul.com',
       whatsapp: { number: '', message: bi('Merhaba Ali, ders hakkında bilgi almak istiyorum.', "Hi Ali, I'd like to ask about lessons.") },
       booking: { url: '', label: bi('Takvimden gün seç', 'Pick a time') },
       links: [
