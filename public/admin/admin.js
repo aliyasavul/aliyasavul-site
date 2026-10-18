@@ -550,7 +550,7 @@ function tabEffects() {
       fRange('theme.effects.glitch', 'Şiddet', { fmt: (v) => (v === 0 ? 'Kapalı' : String(v)) })),
     group('Kehribar', null,
       fRange('theme.effects.glow', 'Işıltı', { hint: 'Taşın etrafındaki parlama; ses açıkken müzikle birlikte nabız atar.' }),
-      fRange('theme.effects.spin', 'Menüde geçerken dönüş hızlanması', { fmt: (v) => (v === 0 ? 'Yok' : String(v)) }),
+      fRange('theme.effects.spin', 'Bölüm geçişlerinde kameranın taşın etrafında dönmesi', { fmt: (v) => (v === 0 ? 'Yok' : String(v)) }),
       fRange('theme.effects.parallax', 'Mouse ile hafif kayma', { fmt: (v) => (v === 0 ? 'Yok' : String(v)) })),
     group('Ses', 'Ziyaretçi “Başlamak için tıkla” deyince bu ses döngü halinde çalar.',
       audioBox(), fBi('audio.title', 'Alt köşede görünen parça adı'), fRange('audio.volume', 'Ses seviyesi', { fmt: (v) => '%' + v })),
@@ -570,7 +570,7 @@ function tabMedia() {
     group('Logo', 'Arka planı şeffaf (PNG, WebP ya da SVG) bir logo yükle. Sitede tek renk gösterilir; rengini “Renk ve yazı tipi” sekmesinden seçersin.',
       h('div', { class: 'imgbox' }, h('div', { class: 'prev' }, preview), h('div', { class: 'row' }, btn, input,
         logo.src !== DEFAULTS.media.logo.src ? h('button', { type: 'button', class: 'btn small', onclick: () => { S.draft.media.logo = clone(DEFAULTS.media.logo); changed({ rerender: true }); } }, 'İlk logoya dön') : null))),
-    group('Kehribar videosu', null, h('p', { class: 'f-h', text: 'Dönen kehribar özel olarak render edilmiş bir video. Değiştirmek ya da farklı bir taş istersen bana yazman yeterli.' })),
+    group('Kehribar', null, h('p', { class: 'f-h', text: 'Kehribar 120 farklı açıdan özel olarak render edildi; site bunlarla taşı gerçek zamanlı 3D olarak çeviriyor. Farklı bir taş istersen bana yazman yeterli.' })),
   ];
 }
 
