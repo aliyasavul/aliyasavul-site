@@ -100,22 +100,28 @@ const isNarrow = () => narrowMQ.matches;
 let scrollP = 0;
 let slides = [];
 
-// Each section has its own camera: an angle around the stone, a height, a tilt and a distance.
-// The camera gets a little closer with every step back in time.
-const BASE_DIST = 4.6;   // the distance the views were rendered from
-const NEAR_DIST = 3.3;   // the closest the camera comes, in the last section
-const FILL = 0.78;       // the stone is drawn at this share of its box, leaving room for close-ups
+// The camera of the first 3D version: far away at the start, then much closer with every step
+// back in time, so the later sections are close-ups that spill past the screen. Each section has
+// its own angle around the stone and its own lean of the stone, and the stone keeps turning slowly.
+const BASE_DIST = 4.6;      // the distance the views were rendered from
+const INTRO_DIST = 5.2;     // the start screen
+const FIRST_DIST = 3.9;     // the first section ...
+const LAST_DIST = 3.0;      // ... and the last one
+const STONE_H = 0.84;       // the stone's height as a share of its frame, seen from BASE_DIST
+const FILL = 0.78;          // the fallback video and poster fill this share of their box
 const YAW_STEP = 1.3;
-const PITCH = [0, 0.16, -0.13, 0.21, -0.17, 0.12, -0.1];
-const ROLL = [0, -0.04, 0.05, -0.035, 0.045, -0.05, 0.03];
+const LEAN = [0, 0.14, -0.1, 0.22, -0.14, 0.12, -0.08];
+const AUTO_SPIN = 0.11;     // radians per second
 
 const m = {
   drag: 0, dragVel: 0,
   orbit: 0, orbitVel: 0,
   pitch: 0, pitchVel: 0, tilt: 0,
+  lean: 0, leanVel: 0,
   roll: 0, rollVel: 0,
-  dist: BASE_DIST, distVel: 0,
-  cam: { x: 0, y: 0, s: 1 },
+  dist: INTRO_DIST, distVel: 0,
+  auto: 0,
+  view: { x: 0, y: 0.1, h: 1 },
 };
 const pointer = { x: 0, y: 0 }, pointerS = { x: 0, y: 0 };
 let raf = 0, lastNow = 0, drag = null;
@@ -131,31 +137,34 @@ function indexOf(id) { return Math.max(0, enabledSections(cfg).findIndex((s) => 
 
 function poseOf(i, n) {
   const spin = fx().spin / 50;
-  const depth = n > 1 ? i / (n - 1) : 0;
+  const k = n > 2 ? clamp((i - 1) / (n - 2), 0, 1) : 0;
   return {
     yaw: i * YAW_STEP * spin,
-    pitch: PITCH[i % PITCH.length] * (0.4 + 0.6 * Math.min(1.5, spin)),
-    roll: ROLL[i % ROLL.length] * Math.min(1.5, spin),
-    dist: BASE_DIST - (BASE_DIST - NEAR_DIST) * depth,
+    lean: LEAN[i % LEAN.length] * (0.4 + 0.6 * Math.min(1.5, spin)),
+    dist: i === 0 ? INTRO_DIST : lerp(FIRST_DIST, LAST_DIST, k),
   };
 }
 
-// where the stone sits on screen for section i; `mag` is how much the camera distance enlarges it
-function camFor(i, mag) {
+// Where the stone's frame sits for section i: centre and height in screen heights, y up.
+// On a computer the frame is as tall as the screen, so the distance alone sets the size, as in
+// the first version. On phones the stone hangs from just under the menu; in the later sections
+// it comes close enough to run on behind the text card, which blurs it.
+function frameFor(i, dist) {
   const n = enabledSections(cfg).length;
   const W = window.innerWidth, H = window.innerHeight;
-  const visH = stone.offsetHeight * 0.62 * mag;   // height of the stone itself, not its box
   if (isNarrow()) {
-    if (i === 0) return { x: 0, y: -H * 0.05, s: 1 };
-    const top = ($('.top', ui)?.getBoundingClientRect().bottom || 120) + 6;
+    const h0 = FILL * Math.min(1.2, 1.6 * W / H);
+    if (i === 0) return { x: 0, y: 0.05, h: h0 * INTRO_DIST / BASE_DIST };
+    const top = ($('.top', ui)?.getBoundingClientRect().bottom || 120) + 10;
     const bottom = H * 0.46 - 6;
-    const s = clamp((bottom - top) / Math.max(1, visH), 0.3, 1);
-    return { x: 0, y: (top + bottom) / 2 - H / 2, s };
+    const grow = 1.1 + 0.55 * (n > 2 ? (i - 1) / (n - 2) : 0);
+    const stoneH = Math.max(0.12, (bottom - top) / H) * grow;
+    const h = clamp(stoneH / (STONE_H * BASE_DIST / dist), 0.2, h0 * 1.7);
+    return { x: 0, y: 0.5 - top / H - stoneH / 2, h };
   }
-  if (i === 0) return { x: 0, y: -H * 0.04, s: 1 };
+  if (i === 0) return { x: 0, y: 0.1, h: 1 };
   const side = i % 2 === 1 ? 1 : -1;
-  const half = stone.offsetWidth * 0.26 * FILL * mag;
-  return { x: side * Math.min(W * 0.25, W / 2 - half - 24), y: 0, s: 1 };
+  return { x: side * clamp(W / H / 2 - 0.36, 0.2, 0.42), y: 0, h: 1 };
 }
 
 // phones: tilting the phone turns the stone, like moving the mouse does on a computer
@@ -206,7 +215,6 @@ try {
   if (typeof createImageBitmap === 'function') {
     stone3d = createStone(glCanvas, {
       maxTextures: (navigator.deviceMemory || 4) >= 4 ? 14 : 9,
-      zoom: FILL,
       onFirstFrame() { glCanvas.classList.add('on'); poster.classList.add('hide'); },
       onFail() { useVideo(); },
     });
@@ -244,46 +252,50 @@ function tick(now) {
   const p = scrollMode ? clamp(scrollP, 0, n - 1) : indexOf(current);
   const i0 = Math.floor(p), i1 = Math.min(n - 1, i0 + 1), f = ease(p - i0);
   const a = poseOf(i0, n), b = poseOf(i1, n);
-  const yawT = lerp(a.yaw, b.yaw, f), pitchT = lerp(a.pitch, b.pitch, f), rollT = lerp(a.roll, b.roll, f), distT = lerp(a.dist, b.dist, f);
-  const c0 = camFor(i0, BASE_DIST / a.dist), c1 = camFor(i1, BASE_DIST / b.dist);
-  const ct = { x: lerp(c0.x, c1.x, f), y: lerp(c0.y, c1.y, f), s: lerp(c0.s, c1.s, f) };
-  // substeps keep the springs stable on slow frames
+  const yawT = lerp(a.yaw, b.yaw, f), leanT = lerp(a.lean, b.lean, f), distT = lerp(a.dist, b.dist, f);
+  const v0 = frameFor(i0, a.dist), v1 = frameFor(i1, b.dist);
+  const vt = { x: lerp(v0.x, v1.x, f), y: lerp(v0.y, v1.y, f), h: lerp(v0.h, v1.h, f) };
+  const kp = 1 - Math.exp(-dt * 3.5);
+  pointerS.x += (pointer.x - pointerS.x) * kp; pointerS.y += (pointer.y - pointerS.y) * kp;
+  const par = reduce ? 0 : fx().parallax / 50;
+  const narrow = isNarrow();
+  // substeps keep the springs stable on slow frames; a computer gets the slower, gliding camera of the first version
   const steps = Math.max(1, Math.ceil(dt / (1 / 60)));
   const h = dt / steps;
   for (let k = 0; k < steps; k++) {
-    spring('orbit', yawT, isNarrow() ? 7 : 5, h);
-    spring('pitch', pitchT + m.tilt, drag ? 14 : 3.6, h);
-    const bank = clamp(m.orbitVel * 0.05, -0.08, 0.08);
-    spring('roll', rollT + bank, 3.6, h);
-    spring('dist', distT, isNarrow() ? 6 : 4.5, h);
+    spring('orbit', yawT, narrow ? 6 : 3.6, h);
+    spring('lean', leanT + pointerS.y * 0.22 * par, narrow ? 5 : 3.4, h);
+    spring('pitch', m.tilt, drag ? 14 : 3.6, h);
+    spring('roll', clamp(m.orbitVel * 0.05, -0.08, 0.08), 3.6, h);
+    spring('dist', distT, narrow ? 5 : 3.4, h);
   }
   if (!drag) {
     m.drag += m.dragVel * dt;
     m.dragVel *= Math.exp(-dt * 2.2);
     m.tilt *= Math.exp(-dt * 2.8);
   }
-  const kc = reduce ? 1 : 1 - Math.exp(-dt * (isNarrow() ? 6 : 4.5));
-  m.cam.x += (ct.x - m.cam.x) * kc; m.cam.y += (ct.y - m.cam.y) * kc; m.cam.s += (ct.s - m.cam.s) * kc;
-  const kp = 1 - Math.exp(-dt * 3.5);
-  pointerS.x += (pointer.x - pointerS.x) * kp; pointerS.y += (pointer.y - pointerS.y) * kp;
-  const par = reduce ? 0 : fx().parallax / 50;
-  // a slow breath instead of a constant spin, so each section keeps its own view of the stone
-  const tt = now / 1000;
-  const sway = reduce || !started ? 0 : Math.sin(tt * 0.31) * 0.07 + Math.sin(tt * 0.13 + 1.7) * 0.05;
-  const bob = reduce || !started ? 0 : Math.sin(tt * 0.27 + 0.6) * 0.022;
+  // the slow turn of the first version never stops while the site is open
+  if (started && !reduce) m.auto += dt * AUTO_SPIN * Math.min(1.5, fx().spin / 50);
+  const kc = reduce ? 1 : 1 - Math.exp(-dt * (narrow ? 5 : 3.4));
+  m.view.x += (vt.x - m.view.x) * kc; m.view.y += (vt.y - m.view.y) * kc; m.view.h += (vt.h - m.view.h) * kc;
   // the camera dips as it swings round, which reads as a move through space
-  const swoop = -0.09 * clamp(Math.abs(m.orbitVel) / 1.4, 0, 1);
-  const yaw = m.drag + m.orbit + sway + pointerS.x * 0.55 * par;
-  const pitch = clamp(m.pitch + swoop + bob + pointerS.y * 0.2 * par, -0.28, 0.28);
-  stone.style.transform = 'translate(-50%, -50%) translate3d(' + (m.cam.x + pointerS.x * 10 * par).toFixed(1) + 'px, ' + (m.cam.y + pointerS.y * 6 * par).toFixed(1) + 'px, 0) scale(' + m.cam.s.toFixed(4) + ')';
+  const swoop = -0.08 * clamp(Math.abs(m.orbitVel) / 1.4, 0, 1);
+  const yaw = m.drag + m.orbit + m.auto + pointerS.x * 0.5 * par;
+  const pitch = clamp(m.pitch + swoop, -0.26, 0.26);
+  const lean = clamp(m.lean, -0.3, 0.3);
+  const H = window.innerHeight;
+  const view = [m.view.x + (pointerS.x * 10 * par) / H, m.view.y - (pointerS.y * 6 * par) / H, m.view.h];
+  // the box with the glow (and the video, if the 3D stone cannot run) follows the stone on screen
+  const boxScale = (view[2] * H * (BASE_DIST / m.dist)) / Math.max(1, FILL * stone.offsetHeight);
+  stone.style.transform = 'translate(-50%, -50%) translate3d(' + (view[0] * H).toFixed(1) + 'px, ' + (-view[1] * H).toFixed(1) + 'px, 0) scale(' + boxScale.toFixed(4) + ')';
   const lvl = audio.level();
   const g = fx().glow / 50;
   glow.style.opacity = (0.02 + 0.06 * g + lvl * 0.55 * g).toFixed(3);
-  // when nothing but the slow breath is happening, draw every other frame to spare the battery
-  const busy = drag || audio.on || recPlaying() || Math.abs(m.orbitVel) + Math.abs(m.pitchVel) + Math.abs(m.rollVel) + Math.abs(m.distVel) > 0.003 || Math.abs(m.dragVel) > 0.02 ||
-    Math.abs(ct.x - m.cam.x) + Math.abs(ct.y - m.cam.y) > 0.5 || Math.abs(ct.s - m.cam.s) > 0.002 || Math.abs(pointer.x - pointerS.x) + Math.abs(pointer.y - pointerS.y) > 0.002;
+  // when only the slow turn is happening, draw every other frame to spare the battery
+  const busy = drag || audio.on || recPlaying() || Math.abs(m.orbitVel) + Math.abs(m.pitchVel) + Math.abs(m.leanVel) + Math.abs(m.rollVel) + Math.abs(m.distVel) > 0.003 || Math.abs(m.dragVel) > 0.02 ||
+    Math.abs(vt.x - m.view.x) + Math.abs(vt.y - m.view.y) + Math.abs(vt.h - m.view.h) > 0.0005 || Math.abs(pointer.x - pointerS.x) + Math.abs(pointer.y - pointerS.y) > 0.002;
   skip = busy ? false : !skip;
-  if (stone3d && !skip) stone3d.render(yaw, pitch, m.roll, lvl * 0.5 * g, false, m.dist);
+  if (stone3d && !skip) stone3d.render({ yaw, pitch, roll: m.roll, tilt: lean, lift: lvl * 0.5 * g, dist: m.dist, view });
   // keep the stone alive while the page is open; before the start screen is passed, only until the first frame is up
   if (started || !stone3d || !stone3d.drawn) wake();
 }

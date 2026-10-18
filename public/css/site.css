@@ -37,17 +37,22 @@ a { color: inherit; }
 /* stage */
 .stage { position: fixed; inset: 0; overflow: hidden; background: var(--bg); touch-action: pan-y; cursor: grab; }
 .stage.dragging { cursor: grabbing; }
-/* the box is larger than the stone (the stone fills 78% of it) so the camera can come close without cropping */
-.stone { position: absolute; left: 50%; top: 50%; height: min(120vh, 160vw); aspect-ratio: 4 / 5; transform: translate(-50%, -50%); will-change: transform; }
-.stone canvas, .stone video, .stone .poster {
+/* the 3D stone is drawn on a canvas over the whole screen; its camera frames the stone itself */
+#stoneGL {
+  position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; display: block; opacity: 0;
+  filter: brightness(0.16) saturate(0.7); transition: filter 2.8s cubic-bezier(.3, .6, .2, 1), opacity .6s ease;
+}
+#stoneGL.on { opacity: 1; }
+#stoneGL[hidden] { display: none; }
+.stage.lit #stoneGL { filter: none; }
+/* this box follows the stone on screen: it holds the glow, the first still and the fallback video */
+.stone { position: absolute; left: 50%; top: 50%; height: min(120vh, 160vw); aspect-ratio: 4 / 5; transform: translate(-50%, -50%); will-change: transform; pointer-events: none; }
+.stone video, .stone .poster {
   position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; display: block; object-fit: cover;
   filter: brightness(0.16) saturate(0.7); transition: filter 2.8s cubic-bezier(.3, .6, .2, 1), opacity .6s ease;
 }
-.stone canvas { opacity: 0; }
-.stone canvas.on { opacity: 1; }
-.stone video[hidden], .stone canvas[hidden] { display: none; }
+.stone video[hidden] { display: none; }
 .stone video, .stone .poster { transform: scale(0.78); }
-.stage.lit .stone canvas { filter: none; }
 /* the 3D stone is coloured in its shader; the video and poster fallbacks get the same colour as a filter */
 .stage.lit .stone video, .stage.lit .stone .poster { filter: var(--stone-filter, none); }
 .stone .poster.hide { opacity: 0; }
@@ -210,13 +215,14 @@ body.in-section .scroll-cue, body.gated .scroll-cue { opacity: 0; }
 /* the fixed bars get a dark fade so text scrolling under them stays readable */
 .top, .bottom { position: relative; }
 .top::before, .bottom::before { content: ""; position: absolute; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .4s; }
+/* on a computer they are only a soft shade, so a close-up of the stone runs on behind the bars */
 .top::before {
-  left: calc(-1 * var(--gutter-l)); right: calc(-1 * var(--gutter-r)); top: calc(-18px - env(safe-area-inset-top, 0px)); bottom: -26px;
-  background: linear-gradient(var(--bg) 62%, transparent);
+  left: calc(-1 * var(--gutter-l)); right: calc(-1 * var(--gutter-r)); top: calc(-18px - env(safe-area-inset-top, 0px)); bottom: -64px;
+  background: linear-gradient(color-mix(in srgb, var(--bg) 72%, transparent), color-mix(in srgb, var(--bg) 38%, transparent) 50%, transparent);
 }
 .bottom::before {
-  left: calc(-1 * var(--gutter-l)); right: calc(-1 * var(--gutter-r)); top: -34px; bottom: calc(-16px - env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(transparent, var(--bg) 58%);
+  left: calc(-1 * var(--gutter-l)); right: calc(-1 * var(--gutter-r)); top: -72px; bottom: calc(-16px - env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(transparent, color-mix(in srgb, var(--bg) 38%, transparent) 50%, color-mix(in srgb, var(--bg) 72%, transparent));
 }
 body.in-section .top::before, body.in-section .bottom::before { opacity: 1; }
 .tl-fill, .tl-mark { transition: none; }
@@ -418,6 +424,9 @@ body.gated .sp-host { display: none; }
   .panel, .panel[data-side] {
     display: block; padding: 46vh var(--gutter-r) calc(96px + env(safe-area-inset-bottom, 0px)) var(--gutter-l); padding-top: 46svh;
   }
+  /* phones keep a solid shade: the text scrolls right under the menu */
+  .top::before { bottom: -26px; background: linear-gradient(var(--bg) 62%, transparent); }
+  .bottom::before { top: -34px; background: linear-gradient(transparent, var(--bg) 58%); }
   .pin, .panel[data-wide] .pin {
     width: auto; margin: 0; padding: 18px 16px 20px; background: var(--scrim); text-shadow: none;
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-top: 1px solid var(--line);

@@ -851,8 +851,7 @@ export function renderPage(cfg, lang) {
   const data = JSON.stringify(cfg).replace(/</g, '\\u003c');
   return '<!doctype html>\n<html lang="' + lang + '">\n<head>\n' + renderHead(cfg, lang) + '\n<noscript><style>.gate{display:none}.panel{position:relative!important;inset:auto!important;width:auto!important;max-height:none!important;margin:24px auto;max-width:640px;opacity:1!important;visibility:visible!important;transform:none!important}.stage,.mark{position:relative}body{overflow:auto}</style></noscript>\n</head>\n' +
     '<body>\n' +
-    '<div class="stage" id="stage"><div class="stone" id="stone" role="img" aria-label="' + esc(L(cfg.strings.stoneLabel)) + '">' +
-    '<canvas id="stoneGL" aria-hidden="true"></canvas>' +
+    '<div class="stage" id="stage"><canvas id="stoneGL" aria-hidden="true"></canvas><div class="stone" id="stone" role="img" aria-label="' + esc(L(cfg.strings.stoneLabel)) + '">' +
     '<video id="amberVideo" muted loop playsinline webkit-playsinline preload="none" disablepictureinpicture disableremoteplayback aria-hidden="true" hidden></video>' +
     '<img class="poster" id="amberPoster" src="' + esc(poster) + '" alt="" width="720" height="900" fetchpriority="high" draggable="false">' +
     '<div class="glow" id="amberGlow" aria-hidden="true"></div></div></div>\n' +

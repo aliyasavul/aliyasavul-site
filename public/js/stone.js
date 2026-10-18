@@ -2,6 +2,8 @@
 // The stone was rendered offline from 120 angles around it, with a depth map for every view.
 // Each view is drawn as a mesh pushed out by its depth, so it can be turned and tilted in real
 // 3D between (and a little beyond) the rendered angles; the two nearest views are blended.
+// The canvas covers the whole screen and the camera frames the stone itself, so it can come
+// close enough for the stone to spill past the edges of the screen.
 // Cheap on the GPU: two small meshes and one blend per frame, whatever the screen size.
 
 const VS_WARP = `#version 300 es
@@ -10,7 +12,8 @@ in vec2 aUV;
 uniform sampler2D uDepth;
 uniform vec4 uCell;
 uniform mat3 uRot;
-uniform float uDist, uFocal, uAspect, uNear, uRange, uDistT, uZoom;
+uniform float uDist, uFocal, uAspect, uNear, uRange, uDistT;
+uniform vec4 uView;   // the frame on screen: centre x and y and height, in screen heights; then the screen's aspect
 out vec2 vUV;
 out float vMask;
 void main(){
@@ -21,20 +24,25 @@ void main(){
   vec3 Q = uRot * P;
   // seen from a camera at distance uDistT: moving it closer enlarges the stone with real perspective
   float z = uDistT - Q.z;
-  vec2 p = Q.xy / (uFocal * z) * uZoom;
+  vec2 p = Q.xy / (uFocal * z) * uView.z + uView.xy;
   float nearT = uDistT - (uDist - uNear);
-  gl_Position = vec4(p.x / (0.5 * uAspect), p.y / 0.5, clamp((z - nearT) / uRange, 0.0, 1.0) * 2.0 - 1.0, 1.0);
+  gl_Position = vec4(p.x / (0.5 * uView.w), p.y / 0.5, clamp((z - nearT) / uRange, 0.0, 1.0) * 2.0 - 1.0, 1.0);
   vUV = aUV;
   vMask = d.g;
 }`;
 
+// the dark background of a view fades out towards the frame's edges, so the frame itself never shows
 const FS_WARP = `#version 300 es
 precision mediump float;
 uniform sampler2D uColor;
 in vec2 vUV;
 in float vMask;
 out vec4 o;
-void main(){ o = vec4(texture(uColor, vUV).rgb, vMask); }`;
+void main(){
+  vec2 e = min(vUV, 1.0 - vUV);
+  float edge = smoothstep(0.0, 0.07, min(e.x, e.y));
+  o = vec4(texture(uColor, vUV).rgb * mix(edge, 1.0, clamp(vMask * 1.6, 0.0, 1.0)), vMask);
+}`;
 
 const VS_FULL = `#version 300 es
 in vec2 aPos;
@@ -50,12 +58,8 @@ in vec2 vUV;
 out vec4 o;
 void main(){
   vec4 c = mix(texture(uA, vUV), texture(uB, vUV), uMix);
-  vec2 q = (vUV - 0.5) * 2.0;
-  float r = length(q);
-  float t = clamp((r - 0.93) / 0.07, 0.0, 1.0);
-  float fade = 1.0 - t * t * (3.0 - 2.0 * t);
   // colour of the amber: hue and saturation turn around the grey axis, so it stays natural
-  vec3 col = clamp(uGrade * c.rgb, 0.0, 1.0) * uBright * fade;
+  vec3 col = clamp(uGrade * c.rgb, 0.0, 1.0) * uBright;
   col += col * uLift * c.a;
   o = vec4(col, 1.0);
 }`;
@@ -97,7 +101,9 @@ export function createStone(canvas, opts) {
     count: 120, frame: (k) => '/assets/amber/c' + String(k).padStart(3, '0') + '.webp',
     depth: '/assets/amber/depth.webp', grid: [12, 10], cell: [160, 200],
     dist: 4.6, focal: 0.6, aspect: 0.8, near: 3.4, range: 2.4,
-    maxTextures: 10, onFirstFrame: null, zoom: 1,
+    // the stone's own posture in the renders: rotY(yaw) · rotX(lean) · rotZ(roll) of the stone
+    lean: 0.10, roll: -0.32,
+    maxTextures: 10, onFirstFrame: null,
   }, opts || {});
 
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, premultipliedAlpha: false, powerPreference: 'high-performance' });
@@ -126,7 +132,7 @@ export function createStone(canvas, opts) {
     return null;
   }
   const U = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
-  const uw = U(warp, ['uDepth', 'uCell', 'uRot', 'uDist', 'uFocal', 'uAspect', 'uNear', 'uRange', 'uColor', 'uDistT', 'uZoom']);
+  const uw = U(warp, ['uDepth', 'uCell', 'uRot', 'uDist', 'uFocal', 'uAspect', 'uNear', 'uRange', 'uColor', 'uDistT', 'uView']);
   const um = U(mixP, ['uA', 'uB', 'uMix', 'uLift', 'uGrade', 'uBright']);
 
   // grid mesh over the frame
@@ -158,23 +164,27 @@ export function createStone(canvas, opts) {
   gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
 
-  // render targets for the two warped views
-  const targets = [0, 1].map(() => ({ fb: gl.createFramebuffer(), tex: gl.createTexture(), depth: gl.createRenderbuffer(), w: 0, h: 0 }));
+  // render targets for the two warped views; their depth is a texture so the cracks can read it back
+  const targets = [0, 1].map(() => ({ fb: gl.createFramebuffer(), tex: gl.createTexture(), depth: gl.createTexture(), w: 0, h: 0 }));
+  function texParams(filter) {
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
   function sizeTargets(w, h) {
     for (const t of targets) {
       if (t.w === w && t.h === h) continue;
       t.w = w; t.h = h;
       gl.bindTexture(gl.TEXTURE_2D, t.tex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.bindRenderbuffer(gl.RENDERBUFFER, t.depth);
-      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+      texParams(gl.LINEAR);
+      gl.bindTexture(gl.TEXTURE_2D, t.depth);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT16, w, h, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, null);
+      texParams(gl.NEAREST);
       gl.bindFramebuffer(gl.FRAMEBUFFER, t.fb);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t.tex, 0);
-      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, t.depth);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, t.depth, 0);
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
@@ -289,13 +299,22 @@ export function createStone(canvas, opts) {
     return [(col * cw + 0.5) / atlasW, (row * ch + 0.5) / atlasH, (cw - 1) / atlasW, (ch - 1) / atlasH];
   }
 
-  function drawView(target, k, yaw, pitch, roll, distT) {
+  const I3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  // How view k is turned for the camera state s. A view is only ever turned a few degrees away
+  // from where it was rendered; if the right view is not decoded yet the stone lags for a moment
+  // instead of stretching. The stone's own lean is a turn about the horizontal axis that follows
+  // the yaw (as in rotY(yaw) · rotX(lean) · stone), so each section can lean the stone its own way.
+  function viewMatrix(k, s) {
+    const turn = Math.max(-MAX_TURN, Math.min(MAX_TURN, wrap(s.yaw - angleOf(k))));
+    const yawEff = angleOf(k) + turn;
+    const lean = s.tilt ? mul(rotY(yawEff), mul(rotX(s.tilt), rotY(-yawEff))) : I3;
+    return mul(rotZ(s.roll), mul(rotX(s.pitch), mul(lean, rotY(turn))));
+  }
+
+  function drawView(target, k, s) {
     const e = textures.get(k);
     e.used = performance.now();
-    // a view is only ever turned a few degrees away from where it was rendered; if the right
-    // view is not decoded yet the stone lags for a moment instead of stretching
-    const turn = Math.max(-MAX_TURN, Math.min(MAX_TURN, wrap(yaw - angleOf(k))));
-    const m = mul(rotZ(roll), mul(rotX(pitch), rotY(turn)));
+    const m = viewMatrix(k, s);
     gl.bindFramebuffer(gl.FRAMEBUFFER, target.fb);
     gl.viewport(0, 0, target.w, target.h);
     gl.clearColor(0, 0, 0, 0);
@@ -316,34 +335,39 @@ export function createStone(canvas, opts) {
     gl.uniform1f(uw.uAspect, o.aspect);
     gl.uniform1f(uw.uNear, o.near);
     gl.uniform1f(uw.uRange, o.range);
-    gl.uniform1f(uw.uDistT, distT);
-    gl.uniform1f(uw.uZoom, o.zoom);
+    gl.uniform1f(uw.uDistT, s.dist);
+    gl.uniform4f(uw.uView, s.view[0], s.view[1], s.view[2], canvas.width / canvas.height);
     gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
     gl.disable(gl.DEPTH_TEST);
   }
 
-  let last = { yaw: NaN, pitch: NaN, roll: NaN, lift: NaN, dist: NaN };
+  let last = null;
   let grade = [1, 0, 0, 0, 1, 0, 0, 0, 1], bright = 1;
-  function render(yaw, pitch, roll, lift = 0, force = false, dist = o.dist) {
+  // state: yaw, pitch and roll of the camera, tilt (the stone's own lean), lift (glow from the
+  // music), dist (camera distance) and view ([x, y, height] of the frame on screen, in screen heights)
+  function render(state, force = false) {
     if (failed || !depthTex) return false;
     resize();
+    const s = Object.assign({ yaw: 0, pitch: 0, roll: 0, tilt: 0, lift: 0, dist: o.dist, view: [0, 0, 1] }, state);
+    const yaw = s.yaw;
     const pos = (((yaw % TAU) + TAU) % TAU) / TAU * o.count;
-    const k0 = Math.floor(pos) % o.count, k1 = (k0 + 1) % o.count, f = pos - Math.floor(pos);
-    const delta = isNaN(last.yaw) ? 0 : wrap(yaw - last.yaw);
+    const k0 = Math.floor(pos) % o.count, k1 = (k0 + 1) % o.count;
+    const delta = last ? wrap(yaw - last[0]) : 0;
     const dir = Math.sign(delta);
     upload(k0); upload(k1);
     // decode the views the stone is about to turn into (about a quarter second ahead)
     const ahead = Math.min(8, 2 + Math.ceil((Math.abs(delta) * 15) / (TAU / o.count)));
-    for (let s = 1; s <= ahead; s++) upload((k0 + (dir < 0 ? -s : s + 1) + o.count * 4) % o.count);
+    for (let i = 1; i <= ahead; i++) upload((k0 + (dir < 0 ? -i : i + 1) + o.count * 4) % o.count);
     const a = nearestReady(k0), b = nearestReady(k1);
     if (a < 0) return false;
-    const changed = dirty || Math.abs(yaw - last.yaw) > 1e-5 || Math.abs(pitch - last.pitch) > 1e-5 || Math.abs(roll - last.roll) > 1e-5 || Math.abs(lift - last.lift) > 1e-3 || Math.abs(dist - last.dist) > 1e-4;
+    const sig = [s.yaw, s.pitch, s.roll, s.tilt, s.lift, s.dist, s.view[0], s.view[1], s.view[2]];
+    const changed = dirty || !last || sig.some((v, i) => Math.abs(v - last[i]) > (i === 4 ? 1e-3 : 1e-5));
     if (!changed && !force) return true;
     dirty = false;
-    last = { yaw, pitch, roll, lift, dist };
-    drawView(targets[0], a, yaw, pitch, roll, dist);
+    last = sig;
+    drawView(targets[0], a, s);
     const blend = b >= 0 && b !== a;
-    if (blend) drawView(targets[1], b, yaw, pitch, roll, dist);
+    if (blend) drawView(targets[1], b, s);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.useProgram(mixP);
@@ -359,7 +383,7 @@ export function createStone(canvas, opts) {
       mixAB = da + db > 1e-6 ? da / (da + db) : 0.5;
     }
     gl.uniform1f(um.uMix, mixAB);
-    gl.uniform1f(um.uLift, lift);
+    gl.uniform1f(um.uLift, s.lift);
     gl.uniformMatrix3fv(um.uGrade, false, grade);
     gl.uniform1f(um.uBright, bright);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
