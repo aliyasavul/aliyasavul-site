@@ -227,3 +227,11 @@ ul.plain { margin: 0 0 14px; padding-left: 18px; color: var(--text); }
 .chip:hover { color: var(--text); border-color: var(--muted); }
 .chip[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: var(--panel2); }
 .chip[aria-pressed="true"]::before { content: "✓ "; color: var(--accent); }
+
+/* recordings: drop files on the list; the player below each one plays the converted MP3 */
+.drop { border-radius: var(--r); outline: 1px dashed transparent; outline-offset: 6px; transition: outline-color .15s, background .15s; }
+.drop.over { outline-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.drop > .row { margin-bottom: 10px; align-items: center; }
+.rec-audio { width: 100%; height: 36px; margin-bottom: 4px; }
+
+.rec-audio { color-scheme: dark; }

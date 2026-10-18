@@ -485,7 +485,7 @@ const STONE_NAMES = { natural: 'Doğal', honey: 'Bal', cherry: 'Kiraz', cognac: 
 const STRING_LABELS = {
   soundOff: 'Alt köşe: ses kapalıyken', nowPlaying: 'Alt köşe: ses açıkken', soundOn: 'Ses düğmesi: aç', soundMute: 'Ses düğmesi: kapat',
   dragHint: 'Alttaki ipucu (bilgisayar)', scrollHint: 'Kaydır ipucu (telefon)', copy: 'Kopyala düğmesi', copied: 'Kopyalandı mesajı', selected: 'Seçildi mesajı', email: 'E-posta etiketi',
-  whatsapp: 'WhatsApp düğmesi', watch: 'Video izle etiketi', listen: 'Şarkı dinle etiketi (sesli okuyucu)', onSpotify: 'Spotify listesinin başlığı', openSpotify: 'Spotify oynatıcısının altındaki link', close: 'Kapat', prev: 'Önceki', next: 'Sonraki',
+  whatsapp: 'WhatsApp düğmesi', watch: 'Video izle etiketi', listen: 'Şarkı dinle etiketi (sesli okuyucu)', onSpotify: 'Spotify listesinin başlığı', openSpotify: 'Spotify oynatıcısının altındaki link', recordings: 'Kayıtlar listesinin başlığı', play: 'Çal düğmesi (sesli okuyucu)', pause: 'Duraklat düğmesi (sesli okuyucu)', seek: 'Şarkıda ilerleme çubuğu (sesli okuyucu)', close: 'Kapat', prev: 'Önceki', next: 'Sonraki',
   backToStart: 'Logo düğmesi (sesli okuyucu)', sections: 'Menü açıklaması (sesli okuyucu)', stoneLabel: 'Taş videosu açıklaması (sesli okuyucu)',
   language: 'Dil', switchTo: 'Dil düğmesi açıklaması', instagram: 'Instagram başlığı', dismiss: 'Duyuruyu kapat (sesli okuyucu)',
 };
@@ -535,7 +535,7 @@ const RESETS = [
   },
   { id: 'about', label: 'Hakkımda', hint: 'Başlık, yazı ve bilgi satırları örnek haline döner.', paths: contentPaths('about') },
   { id: 'lessons', label: 'Dersler', hint: 'Paketler ve fiyatlar da örnek haline döner.', paths: contentPaths('lessons') },
-  { id: 'work', label: 'Portfolyo', hint: 'Eklediğin YouTube videoları ve Spotify şarkıları listeden çıkar.', paths: contentPaths('work') },
+  { id: 'work', label: 'Portfolyo', hint: 'Eklediğin YouTube videoları, kayıtlar ve Spotify şarkıları listeden çıkar.', paths: contentPaths('work') },
   { id: 'gallery', label: 'Galeri ve Instagram', hint: 'Eklediğin fotoğraflar listeden çıkar.', paths: contentPaths('gallery') },
   { id: 'contact', label: 'İletişim', hint: 'E-posta, WhatsApp, takvim ve sosyal medya linkleri.', paths: contentPaths('contact') },
   { id: 'banner', label: 'Duyuru bandı', paths: ['banner'] },
@@ -797,6 +797,14 @@ function trackFields(ip, item) {
     } catch (e) { /* the title can be typed by hand */ }
     changed({ rerender: true });
   });
+  return [h('div', { class: 'thumb-row' }, cover, h('div', null, h('div', { class: 'f' }, lbl(fid, 'Spotify linki'), url))),
+    fBi(ip + '.title', 'Şarkı adı', { hint: 'Linki yapıştırınca kendiliğinden gelir; istersen değiştir.' }),
+    fText(ip + '.artist', 'Sanatçı ya da grup', { placeholder: 'İsteğe bağlı' }),
+    rolesField(ip, item)];
+}
+
+// toggles for the parts Ali played in a song (Spotify songs and his own recordings)
+function rolesField(ip, item) {
   const chips = h('div', { class: 'chips' }, Object.keys(ROLES).map((k) => h('button', {
     type: 'button', class: 'chip', 'aria-pressed': (item.roles || []).includes(k) ? 'true' : 'false',
     onclick: () => {
@@ -807,10 +815,128 @@ function trackFields(ip, item) {
       changed({ rerender: true });
     },
   }, ROLE_NAMES[k] || k)));
-  return [h('div', { class: 'thumb-row' }, cover, h('div', null, h('div', { class: 'f' }, lbl(fid, 'Spotify linki'), url))),
-    fBi(ip + '.title', 'Şarkı adı', { hint: 'Linki yapıştırınca kendiliğinden gelir; istersen değiştir.' }),
+  return h('div', { class: 'f' }, h('span', { class: 'f-l', text: 'Bu şarkıdaki rolün' }), chips, help('Birden fazlasını seçebilirsin. Sitede şarkı adının altında yazar.'));
+}
+
+/* ---- recordings: WAV, AIFF or FLAC masters become 320 kbps MP3s in the browser ---- */
+
+const REC_MAX_IN = 1536 * 1048576;   // what a browser can still open: well over an hour of WAV
+const mmss = (sec) => { const s = Math.max(0, Math.round(sec || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+async function decodeAudio(file) {
+  const AC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!AC) throw new UserError('Bu tarayıcı ses dosyasını açamıyor. Chrome, Edge ya da Safari ile dene.');
+  const data = await file.arrayBuffer();
+  // 44.1 kHz, the rate MP3 players expect; higher-rate masters are resampled by the browser
+  const ctx = new AC(2, 1, 44100);
+  try {
+    return await ctx.decodeAudioData(data);
+  } catch (e) {
+    throw new UserError('“' + file.name + '” açılamadı. WAV, AIFF, FLAC ya da MP3 olarak dene.');
+  }
+}
+function mp3Encode(audio, kbps, onProgress) {
+  return new Promise((resolve, reject) => {
+    const w = new Worker('/admin/mp3-worker.js');
+    const left = audio.getChannelData(0).slice();
+    const right = audio.numberOfChannels > 1 ? audio.getChannelData(1).slice() : null;
+    w.onmessage = (e) => {
+      const m = e.data || {};
+      if (m.progress != null) { if (onProgress) onProgress(m.progress); return; }
+      w.terminate();
+      if (m.done) resolve(m.blob);
+      else reject(new UserError('MP3’e çevrilemedi' + (m.error ? ': ' + m.error : '.')));
+    };
+    w.onerror = () => { w.terminate(); reject(new UserError('MP3’e çevrilemedi. Sayfayı yenileyip tekrar dene.')); };
+    w.postMessage({ left, right, sampleRate: audio.sampleRate, kbps }, right ? [left.buffer, right.buffer] : [left.buffer]);
+  });
+}
+// the outline of the song for the player on the site: 160 bars, one byte each
+function peaksOf(audio, n = 160) {
+  const chans = [];
+  for (let c = 0; c < audio.numberOfChannels; c++) chans.push(audio.getChannelData(c));
+  const len = audio.length, raw = new Float32Array(n);
+  let top = 0;
+  for (let b = 0; b < n; b++) {
+    const from = Math.floor((b * len) / n), to = Math.floor(((b + 1) * len) / n);
+    let peak = 0, sum = 0, cnt = 0;
+    for (const ch of chans) for (let i = from; i < to; i += 3) { const v = Math.abs(ch[i]); if (v > peak) peak = v; sum += v * v; cnt++; }
+    raw[b] = 0.55 * peak + 0.45 * Math.sqrt(sum / Math.max(1, cnt)) * 1.6;
+    if (raw[b] > top) top = raw[b];
+  }
+  let bin = '';
+  for (let b = 0; b < n; b++) bin += String.fromCharCode(Math.round(255 * Math.pow(raw[b] / (top || 1), 0.85)));
+  return btoa(bin);
+}
+async function uploadRecording(file, onProgress) {
+  if (file.size > REC_MAX_IN) throw new UserError('“' + file.name + '” çok büyük (' + (file.size / 1073741824).toFixed(1) + ' GB).');
+  const m = file.name.match(/\.([a-z0-9]{2,5})$/i);
+  const ext = (m ? m[1] : '').toLowerCase();
+  if (!/^audio\//.test(file.type) && !['wav', 'wave', 'aif', 'aiff', 'flac', 'mp3', 'm4a', 'aac', 'ogg'].includes(ext)) throw new UserError('“' + file.name + '” bir ses dosyası gibi görünmüyor.');
+  const audio = await decodeAudio(file);
+  const secs = audio.duration;
+  const base = { duration: Math.round(secs * 10) / 10, peaks: peaksOf(audio) };
+  // an MP3 or AAC file that is already small enough goes up as it is: encoding it again would only lose quality
+  const lossy = ext === 'mp3' || ext === 'm4a' || ext === 'aac' || /audio\/(mpeg|mp3|mp4|aac|x-m4a)/.test(file.type);
+  if (lossy && file.size <= MAX_FILE) return { ...base, src: await addUpload(file, 'kayit', file.name, ext === 'm4a' || ext === 'aac' ? 'm4a' : 'mp3'), kbps: Math.round((file.size * 8) / Math.max(1, secs) / 1000) };
+  // the site can hold files up to 24 MB: long pieces get a slightly lower (still high) bitrate
+  let kbps = audio.numberOfChannels > 1 ? 320 : 192;
+  for (const k of [320, 256, 224, 192, 160]) { if (k <= kbps && (secs * k * 1000) / 8 <= MAX_FILE * 0.97) { kbps = k; break; } }
+  if ((secs * kbps * 1000) / 8 > MAX_FILE * 0.97) throw new UserError('“' + file.name + '” çok uzun (' + mmss(secs) + '). Sitede en fazla yaklaşık 20 dakikalık kayıt olabilir.');
+  const blob = await mp3Encode(audio, kbps, onProgress);
+  return { ...base, src: await addUpload(blob, 'kayit', file.name, 'mp3'), kbps };
+}
+const niceName = (n) => String(n || 'Kayıt').replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Kayıt';
+let recBusy = false;
+async function addRecordings(files) {
+  if (recBusy) { toast('Önceki kayıt hâlâ çevriliyor, bitince tekrar dene.'); return; }
+  recBusy = true;
+  try {
+    for (const [n, file] of files.entries()) {
+      const label = '“' + niceName(file.name) + '”' + (files.length > 1 ? ' (' + (n + 1) + '/' + files.length + ')' : '');
+      toast(label + ' açılıyor…', { ms: 600000 });
+      try {
+        const r = await uploadRecording(file, (p) => toast(label + ' MP3’e çevriliyor… %' + Math.round(p * 100), { ms: 600000 }));
+        const list = get('sections.@work.recordings');
+        const name = niceName(file.name);
+        list.push({ src: r.src, title: bi(name, name), artist: '', roles: [], duration: r.duration, peaks: r.peaks, kbps: r.kbps });
+        changed({ rerender: true });
+      } catch (e) {
+        toast(errorText(e), { error: true, ms: 9000 });
+        return;
+      }
+    }
+    toast((files.length > 1 ? files.length + ' kayıt' : 'Kayıt') + ' eklendi. Önizlemede Portfolyo’da dinleyebilirsin; Yayınla’ya basınca sitede görünür.', { ms: 7000 });
+  } finally {
+    recBusy = false;
+  }
+}
+function recFields(ip, item) {
+  const size = S.uploads.has(item.src) ? S.uploads.get(item.src).blob.size : 0;
+  return [
+    item.src ? h('audio', { class: 'rec-audio', controls: true, preload: 'none', src: previewSrc(item.src) }) : null,
+    help([mmss(item.duration), item.kbps ? item.kbps + ' kbps MP3' : '', size ? (size / 1048576).toFixed(1).replace('.', ',') + ' MB' : ''].filter(Boolean).join(' · ')),
+    fBi(ip + '.title', 'Kayıt adı'),
     fText(ip + '.artist', 'Sanatçı ya da grup', { placeholder: 'İsteğe bağlı' }),
-    h('div', { class: 'f' }, h('span', { class: 'f-l', text: 'Bu şarkıdaki rolün' }), chips, help('Birden fazlasını seçebilirsin. Sitede şarkı adının altında yazar.'))];
+    rolesField(ip, item),
+  ];
+}
+function recordingsBox(p) {
+  const [btn, input] = fileButton('Kayıt yükle', 'audio/*,.wav,.wave,.aif,.aiff,.flac,.mp3,.m4a', true, (files) => addRecordings(files), 'music');
+  const box = h('div', { class: 'drop' },
+    h('div', { class: 'row' }, btn, input, h('span', { class: 'f-h', text: 'ya da dosyaları buraya sürükleyip bırak' })),
+    listEditor({
+      path: p + '.recordings', itemTitle: (it) => t(it.title, 'tr') || 'Kayıt',
+      fields: recFields, empty: 'Henüz kayıt yok.',
+    }));
+  box.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === 'file')) { e.preventDefault(); box.classList.add('over'); } });
+  box.addEventListener('dragleave', (e) => { if (!box.contains(e.relatedTarget)) box.classList.remove('over'); });
+  box.addEventListener('drop', (e) => {
+    e.preventDefault();
+    box.classList.remove('over');
+    const files = [...(e.dataTransfer?.files || [])];
+    if (files.length) addRecordings(files);
+  });
+  return box;
 }
 
 function tabWork() {
@@ -826,6 +952,7 @@ function tabWork() {
       path: p + '.videos', itemTitle: (it) => t(it.title, 'tr') || (youtubeId(it.url) ? 'Video' : 'Yeni video'),
       fields: videoFields, newItem: () => ({ url: '', title: bi() }), addLabel: 'Video ekle', empty: 'Henüz video yok.',
     })),
+    group('Kayıtlar', 'Kendi kayıtların: WAV, AIFF, FLAC ya da MP3 yükle. WAV dosyası senin tarayıcında 320 kbps MP3’e çevrilir; dinleyen kalite farkı duymaz, sitede de beklemeden çalar. WAV’ın bilgisayarında kalır, sadece MP3 yüklenir. Sitede Portfolyo’da, şarkının dalga formunu gösteren bir oynatıcıyla çıkar.', recordingsBox(p)),
     group('Spotify şarkıları', 'Aranjesini, kaydını ya da bestesini yaptığın şarkılar. Spotify’da şarkının yanındaki üç nokta › Paylaş › Şarkı bağlantısını kopyala, buraya yapıştır; adı ve kapağı kendiliğinden gelir. Albüm ya da çalma listesi linki de olur. Sitede tıklayınca Spotify’ın oynatıcısı açılır.', listEditor({
       path: p + '.tracks', itemTitle: (it) => t(it.title, 'tr') || (spotifyRef(it.url) ? 'Şarkı' : 'Yeni şarkı'),
       fields: trackFields, newItem: () => ({ url: '', title: bi(), artist: '', cover: '', roles: [] }), addLabel: 'Şarkı ekle', empty: 'Henüz şarkı yok.',

@@ -1,7 +1,7 @@
 // Runtime for the public site. The page arrives pre-rendered (scripts/build.mjs); this
 // module adds the camera, the glitch, sound, overlays and the TR/EN switch, and re-renders
 // from the same config when the language changes or the admin preview sends a draft.
-import { normalize, renderUI, renderGate, themeCSS, fontsHref, enabledSections, t, safeUrl, themeForDate, withTheme } from './render.js';
+import { normalize, renderUI, renderGate, themeCSS, fontsHref, enabledSections, t, safeUrl, themeForDate, withTheme, mmss } from './render.js';
 import { createStone } from './stone.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -53,6 +53,8 @@ function renderAll() {
   const banner = $('.banner', ui);
   if (banner && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
   syncSound();
+  // a song that is playing carries on in the new language
+  recSync(); recShow();
   if (!enabledSections(cfg).some((s) => s.id === current)) current = 'intro';
   igLoaded = false;
   if (scrollMode) {
@@ -278,7 +280,7 @@ function tick(now) {
   const g = fx().glow / 50;
   glow.style.opacity = (0.02 + 0.06 * g + lvl * 0.55 * g).toFixed(3);
   // when nothing but the slow breath is happening, draw every other frame to spare the battery
-  const busy = drag || audio.on || Math.abs(m.orbitVel) + Math.abs(m.pitchVel) + Math.abs(m.rollVel) + Math.abs(m.distVel) > 0.003 || Math.abs(m.dragVel) > 0.02 ||
+  const busy = drag || audio.on || recPlaying() || Math.abs(m.orbitVel) + Math.abs(m.pitchVel) + Math.abs(m.rollVel) + Math.abs(m.distVel) > 0.003 || Math.abs(m.dragVel) > 0.02 ||
     Math.abs(ct.x - m.cam.x) + Math.abs(ct.y - m.cam.y) > 0.5 || Math.abs(ct.s - m.cam.s) > 0.002 || Math.abs(pointer.x - pointerS.x) + Math.abs(pointer.y - pointerS.y) > 0.002;
   skip = busy ? false : !skip;
   if (stone3d && !skip) stone3d.render(yaw, pitch, m.roll, lvl * 0.5 * g, false, m.dist);
@@ -473,6 +475,20 @@ const audio = (() => {
       return true;
     },
     reset() { if (ctx) teardown(); },
+    // a recording plays through the same graph, so the stone glows with it; false if the element
+    // belongs to an earlier graph (it then has to be replaced) or there is no Web Audio at all
+    attach(node) {
+      if (!ctx && !build()) return false;
+      if (ctx.state === 'suspended') ctx.resume();
+      if (node.ayCtx === ctx) return true;
+      if (node.ayCtx) return false;
+      try {
+        const srcNode = ctx.createMediaElementSource(node);
+        srcNode.connect(an); srcNode.connect(ctx.destination);
+        node.ayCtx = ctx;
+        return true;
+      } catch (e) { return false; }
+    },
     get on() { return on; },
     get isFile() { return !!el; },
     level() {
@@ -494,10 +510,132 @@ function syncSound() {
   btn.title = isOn ? S('soundMute') : S('soundOn');
   const sr = $('.sr-only', btn); if (sr) sr.textContent = btn.title;
   const k = $('#nowK', ui), v = $('#nowV', ui);
-  if (k) k.textContent = isOn ? S('nowPlaying') : S('soundOff');
-  if (v) v.textContent = t(cfg.audio.title, lang);
+  const song = recPlaying() ? recRow(rec.src) : null;
+  if (k) k.textContent = isOn || song ? S('nowPlaying') : S('soundOff');
+  if (v) v.textContent = song ? song.dataset.title : t(cfg.audio.title, lang);
 }
-function setSound(want) { audio.set(want); syncSound(); wake(); }
+function setSound(want) { if (want) recPause(); audio.set(want); syncSound(); wake(); }
+
+/* ---------------- recordings: Ali's own songs, with their outline as the progress bar ---------------- */
+
+const rec = { el: null, src: '', raf: 0, seeking: null };
+const recPlaying = () => !!(rec.el && !rec.el.paused && !rec.el.ended);
+function recRow(src) { return src ? [...ui.querySelectorAll('.rec')].find((li) => li.dataset.src === src) || null : null; }
+function recElement() {
+  if (!rec.el) {
+    const node = new Audio();
+    node.preload = 'none';
+    node.addEventListener('play', recSync);
+    node.addEventListener('pause', recSync);
+    node.addEventListener('ended', () => { recSync(); recShow(0); });
+    node.addEventListener('error', recSync);
+    rec.el = node;
+  }
+  return rec.el;
+}
+function recDur(li) { return (rec.el && rec.src === li.dataset.src && isFinite(rec.el.duration) && rec.el.duration) || Number(li.dataset.dur) || 0; }
+function recShow(frac) {
+  const li = recRow(rec.src);
+  if (!li) return;
+  const dur = recDur(li);
+  const cur = frac != null ? frac * dur : rec.el ? rec.el.currentTime : 0;
+  li.style.setProperty('--p', dur ? Math.min(1, cur / dur).toFixed(4) : '0');
+  const now = $('.rec-now', li);
+  if (now) now.textContent = cur >= 1 ? mmss(cur) + ' / ' : '';
+  const w = $('.rec-wave', li);
+  if (w) { w.setAttribute('aria-valuenow', String(Math.round(cur))); w.setAttribute('aria-valuetext', mmss(cur)); }
+}
+function recSync() {
+  const playing = recPlaying();
+  for (const li of ui.querySelectorAll('.rec')) {
+    const mine = li.dataset.src === rec.src;
+    li.classList.toggle('on', mine && !!rec.el && (playing || rec.el.currentTime > 0));
+    const b = $('.rec-play', li);
+    if (b) {
+      b.setAttribute('aria-pressed', mine && playing ? 'true' : 'false');
+      b.setAttribute('aria-label', (mine && playing ? S('pause') : S('play')) + ': ' + li.dataset.title);
+    }
+  }
+  syncSound();
+  if (playing && !rec.raf) {
+    const loop = () => { rec.raf = recPlaying() ? requestAnimationFrame(loop) : 0; recShow(); };
+    rec.raf = requestAnimationFrame(loop);
+  }
+  wake();
+}
+function recPlay(li, at) {
+  let node = recElement();
+  if (rec.src !== li.dataset.src) {
+    const old = recRow(rec.src);
+    if (old) { old.style.setProperty('--p', '0'); const n0 = $('.rec-now', old); if (n0) n0.textContent = ''; }
+    rec.src = li.dataset.src;
+    node.src = rec.src;
+  }
+  // the site's own sound gives way to the song
+  if (audio.on) { audio.set(false); syncSound(); }
+  if (!audio.attach(node) && node.ayCtx) {
+    // tied to an audio graph that has since been rebuilt: carry on with a fresh element
+    const was = node.currentTime;
+    node.pause();
+    rec.el = null;
+    node = recElement();
+    node.src = rec.src;
+    if (was) at = at == null ? was : at;
+    audio.attach(node);
+  }
+  if (at != null) {
+    const seek = () => { try { node.currentTime = at; } catch (e) { /* not seekable yet */ } };
+    if (node.readyState >= 1) seek(); else node.addEventListener('loadedmetadata', seek, { once: true });
+  }
+  const pr = node.play();
+  if (pr && pr.catch) pr.catch(() => recSync());
+  recSync();
+}
+function recToggle(li) {
+  if (!li) return;
+  if (rec.src === li.dataset.src && recPlaying()) { rec.el.pause(); return; }
+  recPlay(li);
+}
+function recPause() { if (recPlaying()) rec.el.pause(); }
+function recSeek(li, frac, start) {
+  if (rec.src === li.dataset.src && rec.el && rec.el.readyState >= 1 && isFinite(rec.el.duration)) {
+    rec.el.currentTime = frac * rec.el.duration;
+    recShow();
+    if (start && rec.el.paused) recPlay(li);
+  } else if (start) {
+    recPlay(li, frac * (Number(li.dataset.dur) || 0));
+    recShow(frac);
+  }
+}
+const waveFrac = (w, x) => { const r = w.getBoundingClientRect(); return clamp((x - r.left) / Math.max(1, r.width), 0, 1); };
+document.addEventListener('pointerdown', (e) => {
+  const w = e.target.closest && e.target.closest('.rec-wave');
+  if (!w || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const li = w.closest('.rec');
+  rec.seeking = { w, li, id: e.pointerId };
+  try { w.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  recSeek(li, waveFrac(w, e.clientX), true);
+});
+document.addEventListener('pointermove', (e) => {
+  const sk = rec.seeking;
+  if (!sk || sk.id !== e.pointerId) return;
+  recSeek(sk.li, waveFrac(sk.w, e.clientX), false);
+});
+const endSeek = (e) => { if (rec.seeking && rec.seeking.id === e.pointerId) rec.seeking = null; };
+document.addEventListener('pointerup', endSeek);
+document.addEventListener('pointercancel', endSeek);
+document.addEventListener('keydown', (e) => {
+  const w = e.target.closest && e.target.closest('.rec-wave');
+  if (!w) return;
+  const li = w.closest('.rec');
+  const dur = recDur(li);
+  const cur = rec.src === li.dataset.src && rec.el ? rec.el.currentTime : 0;
+  const to = { ArrowRight: cur + 5, ArrowUp: cur + 5, ArrowLeft: cur - 5, ArrowDown: cur - 5, Home: 0, End: dur - 1 }[e.key];
+  if (to == null || !dur) return;
+  e.preventDefault();
+  e.stopPropagation();
+  recSeek(li, clamp(to / dur, 0, 1), true);
+}, true);
 
 /* ---------------- logo: spectral glitch only where the pointer moves ---------------- */
 
@@ -716,6 +854,7 @@ function closeOverlay() {
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
 }
 function openVideo(id, title) {
+  recPause();
   const src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&rel=0&playsinline=1';
   const wasOn = audio.on;
   if (wasOn) setSound(false);
@@ -723,6 +862,7 @@ function openVideo(id, title) {
 }
 // Spotify's own player; it only loads when a song is opened, and the site's sound waits meanwhile
 function openSpotify(ref, title) {
+  recPause();
   const [kind, id] = String(ref || '').split('/');
   if (!/^(track|album|playlist|episode|show|artist)$/.test(kind) || !/^[A-Za-z0-9]{22}$/.test(id || '')) return;
   const wasOn = audio.on;
@@ -842,6 +982,7 @@ document.addEventListener('click', (e) => {
   }
   if (el.dataset.lang) return setLang(el.dataset.lang);
   if (el.dataset.go) { e.preventDefault(); return go(el.dataset.go); }
+  if (el.classList.contains('rec-play')) return recToggle(el.closest('.rec'));
   if (el.dataset.yt) return openVideo(el.dataset.yt, el.dataset.title);
   if (el.dataset.sp) return openSpotify(el.dataset.sp, el.dataset.title);
   if (el.dataset.img !== undefined) return openPhoto(Number(el.dataset.img));

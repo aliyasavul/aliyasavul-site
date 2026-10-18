@@ -283,6 +283,25 @@ body.in-section .top::before, body.in-section .bottom::before { opacity: 1; }
 .trk-play { position: relative; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-strong); }
 .trk-play::after { content: ""; position: absolute; left: 13px; top: 10px; border-style: solid; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent var(--text); }
 .trk:hover .trk-play, .trk:focus-visible .trk-play { border-color: var(--accent); background: var(--accent-soft); }
+/* recordings: a play button, the title and the song's outline, which fills as it plays */
+.recs { display: grid; margin: 10px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.rec { --p: 0; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px 0 10px; border-bottom: 1px solid var(--line); }
+.rec-play { position: relative; width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 1px solid var(--line-strong); background: none; cursor: pointer; text-shadow: none; }
+.rec-play span { position: absolute; left: 17px; top: 14px; border-style: solid; border-width: 8px 0 8px 12px; border-color: transparent transparent transparent var(--text); }
+.rec-play[aria-pressed="true"] span { left: 15px; top: 14px; width: 14px; height: 16px; border: 0; background: linear-gradient(90deg, var(--text) 0 4px, transparent 4px 10px, var(--text) 10px 14px); }
+.rec-play:hover, .rec-play:focus-visible, .rec.on .rec-play { border-color: var(--accent); background: var(--accent-soft); }
+.rec-main { min-width: 0; }
+.rec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.rec-h .trk-t { min-width: 0; }
+.rec-time { flex: none; font: 500 11px/1.2 var(--f-mono); letter-spacing: 0.06em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rec-now { color: var(--accent); }
+.rec-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin-top: 3px; }
+.rec-wave { position: relative; height: 30px; margin-top: 8px; cursor: pointer; touch-action: pan-y; outline-offset: 3px; }
+.rec-wave svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.rec-wave .bg path { fill: color-mix(in srgb, var(--text) 24%, transparent); }
+.rec-wave .fg { clip-path: inset(0 calc((1 - var(--p)) * 100%) 0 0); }
+.rec-wave .fg path { fill: var(--accent); }
+.rec-wave:hover .bg path { fill: color-mix(in srgb, var(--text) 36%, transparent); }
 .ov-spw { display: grid; justify-items: center; gap: 14px; width: min(560px, 100%); }
 .ov-sp-open { font: 500 12px/1.4 var(--f-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line); }
 .ov-sp-open:hover { color: var(--accent); border-color: var(--accent); }

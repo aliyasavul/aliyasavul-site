@@ -155,6 +155,8 @@ export const DEFAULTS = {
         { name: bi('Aranje', 'Arrangement'), desc: bi('Şarkıya göre yazılmış gitar partisyonları', 'Guitar parts written for the song') },
       ],
       videos: [],
+      // Ali's own recordings, uploaded through the panel (MP3s made from his WAV masters)
+      recordings: [],
       // songs on Spotify Ali arranged, recorded, wrote or played on
       tracks: [],
     },
@@ -202,6 +204,10 @@ export const DEFAULTS = {
     listen: bi('Dinle', 'Listen'),
     onSpotify: bi("Spotify'da", 'On Spotify'),
     openSpotify: bi("Spotify'da aç", 'Open in Spotify'),
+    recordings: bi('Kayıtlar', 'Recordings'),
+    play: bi('Çal', 'Play'),
+    pause: bi('Duraklat', 'Pause'),
+    seek: bi('Şarkıda ilerle', 'Seek'),
     close: bi('Kapat', 'Close'),
     prev: bi('Önceki', 'Previous'),
     next: bi('Sonraki', 'Next'),
@@ -362,6 +368,23 @@ export const ROLES = {
   composition: bi('Beste', 'Composition'),
   guitar: bi('Gitar', 'Guitar'),
 };
+
+const rolesText = (roles, L) => (Array.isArray(roles) ? roles : []).filter((r) => ROLES[r]).map((r) => L(ROLES[r])).join(' · ');
+export const mmss = (sec) => { const s = Math.max(0, Math.round(Number(sec) || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+
+// the outline of a recording (160 one-byte bars, base64) as an SVG path in a 640 x 40 box
+function wavePath(peaks) {
+  let bytes = [];
+  try { bytes = Array.from(atob(String(peaks || '')), (ch) => ch.charCodeAt(0)); } catch (e) { bytes = []; }
+  if (!bytes.length) bytes = new Array(80).fill(40);
+  const n = Math.min(240, bytes.length), w = 640 / n, bw = Math.max(1, w * 0.62);
+  let d = '';
+  for (let i = 0; i < n; i++) {
+    const hgt = Math.max(1.5, (bytes[i] / 255) * 40);
+    d += 'M' + (i * w + (w - bw) / 2).toFixed(1) + ' ' + ((40 - hgt) / 2).toFixed(1) + 'h' + bw.toFixed(1) + 'v' + hgt.toFixed(1) + 'h-' + bw.toFixed(1) + 'z';
+  }
+  return d;
+}
 
 // a Spotify link or URI → { kind, id }; also accepts the localised (intl-tr) and embed links
 export function spotifyRef(u) {
@@ -543,11 +566,29 @@ function panelInner(cfg, s, lang) {
         (title ? '<span class="vid-t">' + esc(title) + '</span>' : '') + '</button></li>';
     }).join('');
     if (vids) html += '<ul class="videos">' + vids + '</ul>';
+    const recs = (s.recordings || []).map((r, i) => {
+      // the site's own uploads; blob: links are the panel's preview of a file that is not published yet
+      const src = safeUrl(r && r.src, { allowBlob: true });
+      if (!src || !(/^\/uploads\/[a-z0-9-]+\.(mp3|m4a)$/i.test(src) || /^blob:/.test(src))) return '';
+      const title = L(r.title) || L(cfg.strings.recordings);
+      const roles = rolesText(r.roles, L);
+      const artist = typeof r.artist === 'string' ? r.artist.trim() : '';
+      const d = wavePath(r.peaks);
+      const dur = Math.max(0, Math.round(Number(r.duration) || 0));
+      return '<li class="rec" data-src="' + esc(src) + '" data-title="' + esc(title) + '" data-dur="' + dur + '">' +
+        '<button type="button" class="rec-play" data-rec="' + i + '" aria-pressed="false" aria-label="' + esc(S('play') + ': ' + title) + '"><span aria-hidden="true"></span></button>' +
+        '<div class="rec-main"><div class="rec-h"><span class="trk-t">' + esc(title) + '</span><span class="rec-time"><span class="rec-now"></span>' + mmss(dur) + '</span></div>' +
+        (artist || roles ? '<div class="rec-sub">' + (artist ? '<span class="trk-a">' + esc(artist) + '</span>' : '') + (roles ? '<span class="trk-r">' + esc(roles) + '</span>' : '') + '</div>' : '') +
+        '<div class="rec-wave" role="slider" tabindex="0" aria-label="' + esc(S('seek') + ': ' + title) + '" aria-valuemin="0" aria-valuemax="' + dur + '" aria-valuenow="0" aria-valuetext="0:00">' +
+        '<svg class="bg" viewBox="0 0 640 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + d + '"/></svg>' +
+        '<svg class="fg" viewBox="0 0 640 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + d + '"/></svg></div></div></li>';
+    }).join('');
+    if (recs) html += '<div class="sp"><p class="sub-h">' + esc(S('recordings')) + '</p><ul class="recs">' + recs + '</ul></div>';
     const tracks = (s.tracks || []).map((tr) => {
       const ref = spotifyRef(tr && tr.url);
       if (!ref) return '';
       const title = L(tr.title);
-      const roles = (Array.isArray(tr.roles) ? tr.roles : []).filter((r) => ROLES[r]).map((r) => L(ROLES[r])).join(' · ');
+      const roles = rolesText(tr.roles, L);
       const cover = safeUrl(tr.cover);
       const artist = typeof tr.artist === 'string' ? tr.artist.trim() : '';
       return '<li><button type="button" class="trk" data-sp="' + ref.kind + '/' + ref.id + '" data-title="' + esc(title) + '" aria-label="' + esc(S('listen') + (title ? ': ' + title : '') + (artist ? ', ' + artist : '')) + '">' +
