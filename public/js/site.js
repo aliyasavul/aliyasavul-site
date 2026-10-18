@@ -721,6 +721,21 @@ function openVideo(id, title) {
   if (wasOn) setSound(false);
   openOverlay('<div class="ov-frame"><iframe src="' + src + '" title="' + (title || 'YouTube').replace(/"/g, '&quot;') + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>', { kind: 'video', resume: wasOn });
 }
+// Spotify's own player; it only loads when a song is opened, and the site's sound waits meanwhile
+function openSpotify(ref, title) {
+  const [kind, id] = String(ref || '').split('/');
+  if (!/^(track|album|playlist|episode|show|artist)$/.test(kind) || !/^[A-Za-z0-9]{22}$/.test(id || '')) return;
+  const wasOn = audio.on;
+  if (wasOn) setSound(false);
+  const src = 'https://open.spotify.com/embed/' + kind + '/' + id + '?utm_source=generator&theme=0';
+  const tall = kind !== 'track' && kind !== 'episode';
+  const link = 'https://open.spotify.com/' + kind + '/' + id;
+  openOverlay('<div class="ov-spw"><div class="ov-sp' + (tall ? ' tall' : '') + '"><iframe src="' + src + '" title="' + (title || 'Spotify').replace(/"/g, '&quot;') + '" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe></div>' +
+    '<a class="ov-sp-open" href="' + link + '" target="_blank" rel="noopener">' + S('openSpotify') + ' ↗</a></div>', { kind: 'spotify', resume: wasOn });
+  // the player fades in once it has loaded, so there is no white flash on the dark page
+  const fr = $('.ov-sp iframe', overlay);
+  if (fr) fr.addEventListener('load', () => fr.classList.add('ready'), { once: true });
+}
 function galleryImages() {
   const g = cfg.sections.find((s) => s.id === 'gallery');
   return g ? (g.images || []).filter((im) => safeUrl(im.src, { allowBlob: true })) : [];
@@ -805,7 +820,10 @@ function copyText(btn, text) {
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('button, a');
-  if (!el) { if (e.target === overlay) closeOverlay(); return; }
+  if (!el) {
+    if (e.target === overlay) { const resume = ovState && ovState.resume; closeOverlay(); if (resume) setSound(true); }
+    return;
+  }
   if (el.id === 'startBtn') return enter(wantSound);
   if (el.id === 'gateSound') { wantSound = !wantSound; syncGateSound(); return; }
   if (el.id === 'soundBtn') return setSound(!audio.on);
@@ -825,6 +843,7 @@ document.addEventListener('click', (e) => {
   if (el.dataset.lang) return setLang(el.dataset.lang);
   if (el.dataset.go) { e.preventDefault(); return go(el.dataset.go); }
   if (el.dataset.yt) return openVideo(el.dataset.yt, el.dataset.title);
+  if (el.dataset.sp) return openSpotify(el.dataset.sp, el.dataset.title);
   if (el.dataset.img !== undefined) return openPhoto(Number(el.dataset.img));
   if (el.dataset.copy) return copyText(el, el.dataset.copy);
 });

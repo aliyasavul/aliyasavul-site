@@ -229,14 +229,28 @@ async function me(request, env) {
   return json({ login: s.l, name: s.n, avatar: s.a, repo: repo(env) });
 }
 
-/* ---------------- YouTube titles for the video list ---------------- */
+/* ---------------- titles and covers for the YouTube and Spotify lists ---------------- */
 
 async function oembed(request, env, url) {
   if (!sameOrigin(request, url)) return json({ error: 'forbidden' }, 403);
   if (!(await session(request, env))) return json({ error: 'unauthorized' }, 401);
   let target;
   try { target = new URL(url.searchParams.get('url') || ''); } catch (e) { return json({ error: 'bad_url' }, 400); }
-  if (target.protocol !== 'https:' || !/^(www\.|m\.|music\.)?(youtube\.com|youtu\.be)$/i.test(target.hostname)) return json({ error: 'bad_url' }, 400);
+  if (target.protocol !== 'https:') return json({ error: 'bad_url' }, 400);
+  if (/^(open\.spotify\.com|spotify\.link)$/i.test(target.hostname)) {
+    const res = await fetch('https://open.spotify.com/oembed?url=' + encodeURIComponent(target.toString()), { headers: { 'User-Agent': UA } });
+    if (!res.ok) return json({ error: 'not_found' }, 404);
+    const j = await res.json().catch(() => ({}));
+    const thumb = String(j.thumbnail_url || '');
+    // the player link names the song even when a short spotify.link was pasted
+    const m = String(j.iframe_url || j.html || '').match(/open\.spotify\.com\/embed\/(track|album|playlist|episode|show|artist)\/([A-Za-z0-9]{22})/);
+    return json({
+      title: String(j.title || ''),
+      thumbnail: /^https:\/\/[a-z0-9.-]*(scdn\.co|spotifycdn\.com)\//i.test(thumb) ? thumb : '',
+      url: m ? 'https://open.spotify.com/' + m[1] + '/' + m[2] : '',
+    });
+  }
+  if (!/^(www\.|m\.|music\.)?(youtube\.com|youtu\.be)$/i.test(target.hostname)) return json({ error: 'bad_url' }, 400);
   const res = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(target.toString()), { headers: { 'User-Agent': UA } });
   if (!res.ok) return json({ error: 'not_found' }, 404);
   const j = await res.json().catch(() => ({}));

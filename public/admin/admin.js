@@ -2,7 +2,7 @@
 // Everything editable lives in content/site.json. The panel loads it from GitHub, edits a
 // draft with a live preview, and publishes the draft (plus any new files) as one commit;
 // Cloudflare rebuilds the site from that commit within about a minute.
-import { normalize, clone, FONT_CATALOG, PRESETS, COLOR_KEYS, DEFAULTS, STONE_PRESETS, youtubeId, t, themeForDate } from '/js/render.js';
+import { normalize, clone, FONT_CATALOG, PRESETS, COLOR_KEYS, DEFAULTS, STONE_PRESETS, ROLES, youtubeId, spotifyRef, t, themeForDate } from '/js/render.js';
 
 /* ======================= small helpers ======================= */
 
@@ -485,7 +485,7 @@ const STONE_NAMES = { natural: 'Doğal', honey: 'Bal', cherry: 'Kiraz', cognac: 
 const STRING_LABELS = {
   soundOff: 'Alt köşe: ses kapalıyken', nowPlaying: 'Alt köşe: ses açıkken', soundOn: 'Ses düğmesi: aç', soundMute: 'Ses düğmesi: kapat',
   dragHint: 'Alttaki ipucu (bilgisayar)', scrollHint: 'Kaydır ipucu (telefon)', copy: 'Kopyala düğmesi', copied: 'Kopyalandı mesajı', selected: 'Seçildi mesajı', email: 'E-posta etiketi',
-  whatsapp: 'WhatsApp düğmesi', watch: 'Video izle etiketi', close: 'Kapat', prev: 'Önceki', next: 'Sonraki',
+  whatsapp: 'WhatsApp düğmesi', watch: 'Video izle etiketi', listen: 'Şarkı dinle etiketi (sesli okuyucu)', onSpotify: 'Spotify listesinin başlığı', openSpotify: 'Spotify oynatıcısının altındaki link', close: 'Kapat', prev: 'Önceki', next: 'Sonraki',
   backToStart: 'Logo düğmesi (sesli okuyucu)', sections: 'Menü açıklaması (sesli okuyucu)', stoneLabel: 'Taş videosu açıklaması (sesli okuyucu)',
   language: 'Dil', switchTo: 'Dil düğmesi açıklaması', instagram: 'Instagram başlığı', dismiss: 'Duyuruyu kapat (sesli okuyucu)',
 };
@@ -535,7 +535,7 @@ const RESETS = [
   },
   { id: 'about', label: 'Hakkımda', hint: 'Başlık, yazı ve bilgi satırları örnek haline döner.', paths: contentPaths('about') },
   { id: 'lessons', label: 'Dersler', hint: 'Paketler ve fiyatlar da örnek haline döner.', paths: contentPaths('lessons') },
-  { id: 'work', label: 'Portfolyo', hint: 'Eklediğin YouTube videoları listeden çıkar.', paths: contentPaths('work') },
+  { id: 'work', label: 'Portfolyo', hint: 'Eklediğin YouTube videoları ve Spotify şarkıları listeden çıkar.', paths: contentPaths('work') },
   { id: 'gallery', label: 'Galeri ve Instagram', hint: 'Eklediğin fotoğraflar listeden çıkar.', paths: contentPaths('gallery') },
   { id: 'contact', label: 'İletişim', hint: 'E-posta, WhatsApp, takvim ve sosyal medya linkleri.', paths: contentPaths('contact') },
   { id: 'banner', label: 'Duyuru bandı', paths: ['banner'] },
@@ -771,6 +771,48 @@ function videoFields(ip, item) {
     fBi(ip + '.title', 'Video başlığı', { hint: 'Linki yapıştırınca başlık kendiliğinden gelir; istersen değiştir.' })];
 }
 
+const ROLE_NAMES = { arrangement: 'Aranje', recording: 'Kayıt', composition: 'Beste', guitar: 'Gitar' };
+function trackFields(ip, item) {
+  const cover = h('img', { class: 'thumb sq', alt: '', src: item.cover || '' });
+  if (!item.cover) cover.style.visibility = 'hidden';
+  const fid = nid();
+  const url = h('input', { id: fid, type: 'url', placeholder: 'https://open.spotify.com/track/…', value: item.url || '', autocomplete: 'off' });
+  url.addEventListener('input', () => set(ip + '.url', url.value.trim()));
+  url.addEventListener('change', async () => {
+    const raw = url.value.trim();
+    if (!raw) return;
+    const ref = spotifyRef(raw);
+    if (!ref && !/^https:\/\/spotify\.link\/\w+/i.test(raw)) {
+      toast('Bu bir Spotify şarkı linki gibi görünmüyor. Spotify’da şarkının yanındaki üç nokta › Paylaş › Şarkı bağlantısını kopyala.', { error: true });
+      return;
+    }
+    const it = get(ip);
+    // keep a tidy link without the ?si= part Spotify adds when sharing
+    if (ref) it.url = 'https://open.spotify.com/' + ref.kind + '/' + ref.id;
+    try {
+      const r = await api('/api/oembed?url=' + encodeURIComponent(raw));
+      if (r && r.url) it.url = r.url;
+      if (r && r.thumbnail) it.cover = r.thumbnail;
+      if (r && r.title && !t(it.title, 'tr') && !t(it.title, 'en')) it.title = bi(r.title, r.title);
+    } catch (e) { /* the title can be typed by hand */ }
+    changed({ rerender: true });
+  });
+  const chips = h('div', { class: 'chips' }, Object.keys(ROLES).map((k) => h('button', {
+    type: 'button', class: 'chip', 'aria-pressed': (item.roles || []).includes(k) ? 'true' : 'false',
+    onclick: () => {
+      const it = get(ip);
+      const on = new Set(Array.isArray(it.roles) ? it.roles : []);
+      if (on.has(k)) on.delete(k); else on.add(k);
+      it.roles = Object.keys(ROLES).filter((r) => on.has(r));
+      changed({ rerender: true });
+    },
+  }, ROLE_NAMES[k] || k)));
+  return [h('div', { class: 'thumb-row' }, cover, h('div', null, h('div', { class: 'f' }, lbl(fid, 'Spotify linki'), url))),
+    fBi(ip + '.title', 'Şarkı adı', { hint: 'Linki yapıştırınca kendiliğinden gelir; istersen değiştir.' }),
+    fText(ip + '.artist', 'Sanatçı ya da grup', { placeholder: 'İsteğe bağlı' }),
+    h('div', { class: 'f' }, h('span', { class: 'f-l', text: 'Bu şarkıdaki rolün' }), chips, help('Birden fazlasını seçebilirsin. Sitede şarkı adının altında yazar.'))];
+}
+
 function tabWork() {
   const p = 'sections.@work';
   return [hiddenNote('work'),
@@ -783,6 +825,10 @@ function tabWork() {
     group('YouTube videoları', 'Linki yapıştırman yeterli; kapak resmi ve başlık kendiliğinden gelir. Sitede kapak resmine tıklayınca video açılır.', listEditor({
       path: p + '.videos', itemTitle: (it) => t(it.title, 'tr') || (youtubeId(it.url) ? 'Video' : 'Yeni video'),
       fields: videoFields, newItem: () => ({ url: '', title: bi() }), addLabel: 'Video ekle', empty: 'Henüz video yok.',
+    })),
+    group('Spotify şarkıları', 'Aranjesini, kaydını ya da bestesini yaptığın şarkılar. Spotify’da şarkının yanındaki üç nokta › Paylaş › Şarkı bağlantısını kopyala, buraya yapıştır; adı ve kapağı kendiliğinden gelir. Albüm ya da çalma listesi linki de olur. Sitede tıklayınca Spotify’ın oynatıcısı açılır.', listEditor({
+      path: p + '.tracks', itemTitle: (it) => t(it.title, 'tr') || (spotifyRef(it.url) ? 'Şarkı' : 'Yeni şarkı'),
+      fields: trackFields, newItem: () => ({ url: '', title: bi(), artist: '', cover: '', roles: [] }), addLabel: 'Şarkı ekle', empty: 'Henüz şarkı yok.',
     })),
   ];
 }
@@ -1022,7 +1068,7 @@ const TABS = [
   { id: 'sections', group: 'İçerik', label: 'Menü ve bölümler', focus: null, render: tabSections },
   { id: 'about', group: 'İçerik', label: 'Hakkımda', focus: 'about', render: tabAbout },
   { id: 'lessons', group: 'İçerik', label: 'Dersler', focus: 'lessons', render: tabLessons },
-  { id: 'work', group: 'İçerik', label: 'Portfolyo ve YouTube', focus: 'work', render: tabWork },
+  { id: 'work', group: 'İçerik', label: 'Portfolyo, YouTube, Spotify', focus: 'work', render: tabWork },
   { id: 'gallery', group: 'İçerik', label: 'Galeri ve Instagram', focus: 'gallery', render: tabGallery },
   { id: 'contact', group: 'İçerik', label: 'İletişim', focus: 'contact', render: tabContact },
   { id: 'banner', group: 'İçerik', label: 'Duyuru bandı', focus: 'intro', render: tabBanner },

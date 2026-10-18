@@ -155,6 +155,8 @@ export const DEFAULTS = {
         { name: bi('Aranje', 'Arrangement'), desc: bi('Şarkıya göre yazılmış gitar partisyonları', 'Guitar parts written for the song') },
       ],
       videos: [],
+      // songs on Spotify Ali arranged, recorded, wrote or played on
+      tracks: [],
     },
     {
       id: 'gallery', enabled: true, stamp: '66',
@@ -197,6 +199,9 @@ export const DEFAULTS = {
     email: bi('E-posta', 'Email'),
     whatsapp: bi("WhatsApp'tan yaz", 'Message on WhatsApp'),
     watch: bi('İzle', 'Watch'),
+    listen: bi('Dinle', 'Listen'),
+    onSpotify: bi("Spotify'da", 'On Spotify'),
+    openSpotify: bi("Spotify'da aç", 'Open in Spotify'),
     close: bi('Kapat', 'Close'),
     prev: bi('Önceki', 'Previous'),
     next: bi('Sonraki', 'Next'),
@@ -348,6 +353,22 @@ export function safeUrl(u, { allowBlob = false } = {}) {
 function cssUrl(u) {
   const s = safeUrl(u, { allowBlob: true });
   return s && !/[()\\]/.test(s) ? s : '';
+}
+
+// the parts Ali can have played in a song, shown under its title
+export const ROLES = {
+  arrangement: bi('Aranje', 'Arrangement'),
+  recording: bi('Kayıt', 'Recording'),
+  composition: bi('Beste', 'Composition'),
+  guitar: bi('Gitar', 'Guitar'),
+};
+
+// a Spotify link or URI → { kind, id }; also accepts the localised (intl-tr) and embed links
+export function spotifyRef(u) {
+  const s = String(u || '').trim();
+  let m = s.match(/^spotify:(track|album|playlist|episode|show|artist):([A-Za-z0-9]{22})$/);
+  if (!m) m = s.match(/^https:\/\/open\.spotify\.com\/(?:intl-[a-z]{2}(?:-[a-z]{2})?\/)?(?:embed\/)?(track|album|playlist|episode|show|artist)\/([A-Za-z0-9]{22})(?:[/?#].*)?$/i);
+  return m ? { kind: m[1].toLowerCase(), id: m[2] } : null;
 }
 
 export function youtubeId(url) {
@@ -522,6 +543,19 @@ function panelInner(cfg, s, lang) {
         (title ? '<span class="vid-t">' + esc(title) + '</span>' : '') + '</button></li>';
     }).join('');
     if (vids) html += '<ul class="videos">' + vids + '</ul>';
+    const tracks = (s.tracks || []).map((tr) => {
+      const ref = spotifyRef(tr && tr.url);
+      if (!ref) return '';
+      const title = L(tr.title);
+      const roles = (Array.isArray(tr.roles) ? tr.roles : []).filter((r) => ROLES[r]).map((r) => L(ROLES[r])).join(' · ');
+      const cover = safeUrl(tr.cover);
+      const artist = typeof tr.artist === 'string' ? tr.artist.trim() : '';
+      return '<li><button type="button" class="trk" data-sp="' + ref.kind + '/' + ref.id + '" data-title="' + esc(title) + '" aria-label="' + esc(S('listen') + (title ? ': ' + title : '') + (artist ? ', ' + artist : '')) + '">' +
+        '<span class="trk-img">' + (cover ? '<img src="' + esc(cover) + '" alt="" loading="lazy" width="300" height="300">' : '') + '</span>' +
+        '<span class="trk-txt">' + '<span class="trk-t">' + esc(title || 'Spotify') + '</span>' + (artist ? '<span class="trk-a">' + esc(artist) + '</span>' : '') + (roles ? '<span class="trk-r">' + esc(roles) + '</span>' : '') + '</span>' +
+        '<span class="trk-play" aria-hidden="true"></span></button></li>';
+    }).join('');
+    if (tracks) html += '<div class="sp"><p class="sub-h">' + esc(S('onSpotify')) + '</p><ul class="tracks">' + tracks + '</ul></div>';
   }
 
   if (s.id === 'gallery') {

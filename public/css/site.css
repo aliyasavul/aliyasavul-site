@@ -265,8 +265,32 @@ body.in-section .top::before, body.in-section .bottom::before { opacity: 1; }
 .ph::after, .ig-grid a::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px); transition: opacity .3s; }
 .ph:hover img, .ig-grid a:hover img { transform: scale(1.06); filter: contrast(1.08) saturate(1.1) drop-shadow(2px 0 0 rgba(255, 40, 60, 0.45)) drop-shadow(-2px 0 0 rgba(40, 200, 255, 0.45)); }
 .ph:hover::after, .ig-grid a:hover::after { opacity: 1; }
+/* songs on Spotify: a tracklist with the covers; the player opens over the page */
+.sp { margin-top: 26px; }
+.sub-h, .ig-h { margin: 0; font: 500 12px/1.4 var(--f-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.tracks { display: grid; margin: 10px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.trk {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) 34px; align-items: center; gap: 14px; width: 100%; padding: 10px 0;
+  border: 0; border-bottom: 1px solid var(--line); background: none; cursor: pointer; text-align: left; text-shadow: none;
+}
+.trk-img { position: relative; display: block; width: 56px; height: 56px; overflow: hidden; background: #111; outline: 1px solid var(--line); }
+.trk-img img { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(0.85); transition: transform .6s cubic-bezier(.22, .7, .2, 1), filter .3s; }
+.trk:hover .trk-img img, .trk:focus-visible .trk-img img { transform: scale(1.08); filter: contrast(1.08) saturate(1.1) drop-shadow(2px 0 0 rgba(255, 40, 60, 0.45)) drop-shadow(-2px 0 0 rgba(40, 200, 255, 0.45)); }
+.trk-txt { display: grid; gap: 3px; min-width: 0; }
+.trk-t { font: 600 15px/1.2 var(--f-display); letter-spacing: 0.1em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trk-a { font: 400 14px/1.3 var(--f-body); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trk-r { font: 500 11px/1.3 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.trk-play { position: relative; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-strong); }
+.trk-play::after { content: ""; position: absolute; left: 13px; top: 10px; border-style: solid; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent var(--text); }
+.trk:hover .trk-play, .trk:focus-visible .trk-play { border-color: var(--accent); background: var(--accent-soft); }
+.ov-spw { display: grid; justify-items: center; gap: 14px; width: min(560px, 100%); }
+.ov-sp-open { font: 500 12px/1.4 var(--f-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line); }
+.ov-sp-open:hover { color: var(--accent); border-color: var(--accent); }
+.ov-sp { width: min(560px, 100%); height: 352px; border-radius: 12px; overflow: hidden; background: #121212; outline: 1px solid var(--line); }
+.ov-sp.tall { height: min(560px, calc(100vh - 160px)); }
+.ov-sp iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; opacity: 0; transition: opacity .35s ease; }
+.ov-sp iframe.ready { opacity: 1; }
 .ig { margin-top: 26px; }
-.ig-h { margin: 0; font: 500 12px/1.4 var(--f-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .ig-grid { margin-top: 10px; }
 .ig-grid:empty { display: none; }
 
