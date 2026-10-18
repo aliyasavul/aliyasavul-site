@@ -2,6 +2,7 @@
 // module adds the camera, the glitch, sound, overlays and the TR/EN switch, and re-renders
 // from the same config when the language changes or the admin preview sends a draft.
 import { normalize, renderUI, renderGate, themeCSS, fontsHref, enabledSections, t, safeUrl } from './render.js';
+import { createStone } from './stone.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -46,13 +47,19 @@ function renderAll() {
   document.documentElement.lang = lang;
   ui.innerHTML = renderUI(cfg, lang);
   const gate = $('#gate');
-  if (gate && !gate.classList.contains('gone')) gateRoot.innerHTML = renderGate(cfg, lang);
+  if (gate && !gate.classList.contains('gone')) { gateRoot.innerHTML = renderGate(cfg, lang); syncGateSound(); }
   const banner = $('.banner', ui);
   if (banner && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
   syncSound();
   if (!enabledSections(cfg).some((s) => s.id === current)) current = 'intro';
   igLoaded = false;
-  go(current, { silent: true });
+  if (scrollMode) {
+    applyMode();
+    const keep = current;
+    requestAnimationFrame(() => { measureSlides(); go(keep, { instant: true }); });
+  } else {
+    applyMode();
+  }
 }
 
 function setLang(next) {
@@ -68,83 +75,195 @@ function setLang(next) {
   if (btn && document.activeElement === document.body) btn.focus({ preventScroll: true });
 }
 
-/* ---------------- the amber: a pre-rendered turntable, moved like a camera ---------------- */
+/* ---------------- the amber: an image-based 3D stone, and the camera around it ---------------- */
 
 const stage = $('#stage');
 const stone = $('#stone');
+const glCanvas = $('#stoneGL');
 const video = $('#amberVideo');
 const poster = $('#amberPoster');
 const glow = $('#amberGlow');
-const cam = { x: 0, y: 0, s: 1 };
-const pointer = { x: 0, y: 0 }, pointerS = { x: 0, y: 0 };
-let boost = 0, raf = 0, lastNow = 0, lastRate = 1, drag = null, wasPlaying = false, pendingSeek = null;
 const fx = () => cfg.theme.effects;
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = (t) => t * t * (3 - 2 * t);
 
-function viewOf(id) {
-  const list = enabledSections(cfg);
-  const i = Math.max(0, list.findIndex((s) => s.id === id));
-  if (i === 0) return { scale: 1, side: 0 };
-  const depth = list.length > 2 ? (i - 1) / (list.length - 2) : 0;
-  return { scale: 1.06 + 0.16 * depth, side: i % 2 === 1 ? 1 : -1 };
+const narrowMQ = window.matchMedia('(max-width: 760px), (max-aspect-ratio: 1/1)');
+let scrollMode = narrowMQ.matches;
+let scrollP = 0;
+let slides = [];
+
+// where the camera looks from in each section: how far it orbits the stone, its height and tilt
+const ORBIT = 0.95;
+const PITCH = [0, 0.13, -0.1, 0.16, -0.08, 0.12, -0.12];
+const ROLL = [0, -0.035, 0.04, -0.03, 0.035, -0.04, 0.03];
+const AUTO = TAU / 26;
+
+const m = {
+  auto: 0, drag: 0, dragVel: 0,
+  orbit: 0, orbitVel: 0,
+  pitch: 0, pitchVel: 0, tilt: 0,
+  roll: 0, rollVel: 0,
+  cam: { x: 0, y: 0, s: 1 },
+};
+const pointer = { x: 0, y: 0 }, pointerS = { x: 0, y: 0 };
+let raf = 0, lastNow = 0, drag = null;
+
+function spring(key, target, w, dt) {
+  if (reduce) { m[key] = target; m[key + 'Vel'] = 0; return; }
+  const a = w * w * (target - m[key]) - 2 * w * m[key + 'Vel'];
+  m[key + 'Vel'] += a * dt;
+  m[key] += m[key + 'Vel'] * dt;
 }
 
-function isNarrow() { return window.innerWidth / window.innerHeight < 1 || window.innerWidth <= 760; }
+function indexOf(id) { return Math.max(0, enabledSections(cfg).findIndex((s) => s.id === id)); }
 
-function target() {
-  const v = viewOf(current);
+// screen position and size of the stone for section i
+function camFor(i) {
+  const n = enabledSections(cfg).length;
   const W = window.innerWidth, H = window.innerHeight;
-  if (isNarrow()) {
-    if (v.side === 0) return { x: 0, y: -H * 0.05, s: 1 };
-    const top = ($('.top', ui)?.getBoundingClientRect().bottom || 120) + 10;
-    const panel = $('.panel.is-active', ui);
-    const bottom = panel ? panel.getBoundingClientRect().top - 10 : H * 0.55;
-    const avail = Math.max(90, bottom - top);
-    const s = Math.min(0.92, Math.max(0.3, avail / (stone.offsetHeight * 0.8)));
+  if (scrollMode) {
+    if (i === 0) return { x: 0, y: -H * 0.05, s: 1 };
+    const top = ($('.top', ui)?.getBoundingClientRect().bottom || 120) + 6;
+    const bottom = H * 0.46 - 6;
+    const s = clamp((bottom - top) / (stone.offsetHeight * 0.8), 0.3, 0.9);
     return { x: 0, y: (top + bottom) / 2 - H / 2, s };
   }
-  if (v.side === 0) return { x: 0, y: -H * 0.04, s: 1 };
-  const half = stone.offsetWidth * 0.26 * v.scale;
-  return { x: v.side * Math.min(W * 0.25, W / 2 - half - 24), y: 0, s: v.scale };
+  if (i === 0) return { x: 0, y: -H * 0.04, s: 1 };
+  const depth = n > 2 ? (i - 1) / (n - 2) : 0;
+  const scale = 1.06 + 0.16 * depth;
+  const side = i % 2 === 1 ? 1 : -1;
+  const half = stone.offsetWidth * 0.26 * scale;
+  return { x: side * Math.min(W * 0.25, W / 2 - half - 24), y: 0, s: scale };
 }
 
+let stone3d = null, usingVideo = false;
+function useVideo() {
+  if (usingVideo) return;
+  usingVideo = true;
+  stone3d = null;
+  glCanvas.hidden = true;
+  video.hidden = false;
+  const st = cfg.media.stone;
+  const list = [];
+  if (video.canPlayType('video/mp4; codecs="avc1.64001F"')) list.push(safeUrl(st.mp4));
+  if (st.webm && video.canPlayType('video/webm; codecs="vp9"')) list.push(safeUrl(st.webm));
+  if (!list.length) list.push(safeUrl(st.mp4));
+  let k = 0;
+  video.muted = true;
+  video.addEventListener('loadeddata', () => poster.classList.add('hide'));
+  video.addEventListener('error', () => { if (++k < list.length) { video.src = list[k]; if (started) playVideo(); } else { video.hidden = true; poster.classList.remove('hide'); } });
+  video.preload = 'auto';
+  video.src = list[0];
+  if (started) playVideo();
+}
+function playVideo() { const pr = video.play(); if (pr && pr.catch) pr.catch(() => {}); }
+try {
+  if (typeof createImageBitmap === 'function') {
+    stone3d = createStone(glCanvas, {
+      maxTextures: (navigator.deviceMemory || 4) >= 4 ? 14 : 9,
+      onFirstFrame() { glCanvas.classList.add('on'); poster.classList.add('hide'); },
+      onFail() { useVideo(); },
+    });
+  }
+} catch (e) { stone3d = null; }
+if (!stone3d) useVideo();
+// frames arrived but nothing could be drawn (a graphics problem): fall back to the video
+setTimeout(() => { if (stone3d && !stone3d.drawn && stone3d.loaded > 3) useVideo(); }, 20000);
+
+// slow devices get a lower drawing resolution instead of a choppy stone
+const perf = { n: 0, sum: 0, settled: false };
+let startedAt = 0;
+function trackFrame(ms) {
+  if (perf.settled || !started || !stone3d || !stone3d.drawn || document.hidden || performance.now() - startedAt < 2000) return;
+  if (ms > 100) return;
+  perf.n++; perf.sum += ms;
+  if (perf.n < 45) return;
+  const avg = perf.sum / perf.n;
+  perf.n = 0; perf.sum = 0;
+  if (avg > 24 && stone3d.quality > 0.5) stone3d.setQuality(stone3d.quality * 0.75);
+  else perf.settled = true;
+}
+
+let skip = false;
 function tick(now) {
   raf = 0;
-  const dt = Math.min(0.1, (now - (lastNow || now)) / 1000); lastNow = now;
-  const tg = target();
-  const k = reduce ? 1 : 1 - Math.exp(-dt * 2.2);
-  cam.x += (tg.x - cam.x) * k; cam.y += (tg.y - cam.y) * k; cam.s += (tg.s - cam.s) * k;
+  if (lastNow) trackFrame(now - lastNow);
+  let dt = Math.min(0.1, (now - (lastNow || now)) / 1000); lastNow = now;
+  const list = enabledSections(cfg);
+  const n = list.length;
+  const p = scrollMode ? clamp(scrollP, 0, n - 1) : indexOf(current);
+  const i0 = Math.floor(p), i1 = Math.min(n - 1, i0 + 1), f = ease(p - i0);
+  const c0 = camFor(i0), c1 = camFor(i1);
+  const ct = { x: lerp(c0.x, c1.x, f), y: lerp(c0.y, c1.y, f), s: lerp(c0.s, c1.s, f) };
+  const spin = fx().spin / 50;
+  const orbitT = p * ORBIT * spin;
+  const pitchT = lerp(PITCH[i0 % PITCH.length], PITCH[i1 % PITCH.length], f) * (0.4 + 0.6 * spin);
+  // substeps keep the springs stable on slow frames
+  const steps = Math.max(1, Math.ceil(dt / (1 / 60)));
+  const h = dt / steps;
+  for (let k = 0; k < steps; k++) {
+    spring('orbit', orbitT, scrollMode ? 7 : 2.4, h);
+    spring('pitch', pitchT + m.tilt, drag ? 14 : 4, h);
+    const bank = clamp(m.orbitVel * 0.045, -0.07, 0.07);
+    spring('roll', lerp(ROLL[i0 % ROLL.length], ROLL[i1 % ROLL.length], f) * spin + bank, 4, h);
+  }
+  if (!drag) {
+    m.drag += m.dragVel * dt;
+    m.dragVel *= Math.exp(-dt * 2.2);
+    m.tilt *= Math.exp(-dt * 2.8);
+  }
+  if (!reduce && started) m.auto += AUTO * dt;
+  const kc = reduce ? 1 : 1 - Math.exp(-dt * (scrollMode ? 6 : 2.2));
+  m.cam.x += (ct.x - m.cam.x) * kc; m.cam.y += (ct.y - m.cam.y) * kc; m.cam.s += (ct.s - m.cam.s) * kc;
   const kp = 1 - Math.exp(-dt * 3.5);
   pointerS.x += (pointer.x - pointerS.x) * kp; pointerS.y += (pointer.y - pointerS.y) * kp;
   const par = reduce ? 0 : fx().parallax / 50;
-  const px = pointerS.x * 16 * par, py = pointerS.y * 10 * par, rot = pointerS.x * 1.4 * par;
-  stone.style.transform = 'translate(-50%, -50%) translate3d(' + (cam.x + px).toFixed(1) + 'px, ' + (cam.y + py).toFixed(1) + 'px, 0) rotate(' + rot.toFixed(2) + 'deg) scale(' + cam.s.toFixed(4) + ')';
-  boost *= Math.exp(-dt * 1.6);
-  if (!reduce && !drag && started) {
-    const rate = 1 + Math.min(2.2, boost);
-    if (Math.abs(rate - lastRate) > 0.04) { try { video.playbackRate = rate; } catch (e) { /* ignore */ } lastRate = rate; }
-  }
+  // the camera dips as it swings round, which reads as a move through space
+  const swoop = -0.08 * clamp(Math.abs(m.orbitVel) / 1.4, 0, 1);
+  const yaw = m.auto + m.drag + m.orbit + pointerS.x * 0.16 * par;
+  const pitch = clamp(m.pitch + swoop - pointerS.y * 0.1 * par, -0.26, 0.26);
+  stone.style.transform = 'translate(-50%, -50%) translate3d(' + (m.cam.x + pointerS.x * 8 * par).toFixed(1) + 'px, ' + (m.cam.y + pointerS.y * 5 * par).toFixed(1) + 'px, 0) scale(' + m.cam.s.toFixed(4) + ')';
   const lvl = audio.level();
-  const base = 0.02 + 0.06 * (fx().glow / 50);
-  glow.style.opacity = (base + lvl * 0.55 * (fx().glow / 50)).toFixed(3);
-  const moving = Math.abs(tg.x - cam.x) + Math.abs(tg.y - cam.y) > 0.5 || Math.abs(tg.s - cam.s) > 0.002 ||
-    Math.abs(pointer.x - pointerS.x) + Math.abs(pointer.y - pointerS.y) > 0.002 || boost > 0.03 || audio.on || lvl > 0.005;
-  if (moving) wake();
-  else if (lastRate !== 1 && !drag && started) { try { video.playbackRate = 1; } catch (e) { /* ignore */ } lastRate = 1; }
+  const g = fx().glow / 50;
+  glow.style.opacity = (0.02 + 0.06 * g + lvl * 0.55 * g).toFixed(3);
+  // when nothing but the slow idle spin is happening, draw every other frame to spare the battery
+  const busy = drag || audio.on || Math.abs(m.orbitVel) + Math.abs(m.pitchVel) + Math.abs(m.rollVel) > 0.003 || Math.abs(m.dragVel) > 0.02 ||
+    Math.abs(ct.x - m.cam.x) + Math.abs(ct.y - m.cam.y) > 0.5 || Math.abs(ct.s - m.cam.s) > 0.002 || Math.abs(pointer.x - pointerS.x) + Math.abs(pointer.y - pointerS.y) > 0.002;
+  skip = busy ? false : !skip;
+  if (stone3d && !skip) stone3d.render(yaw, pitch, m.roll, lvl * 0.5 * g);
+  // keep turning while the page is open; before the start screen is passed, only until the first frame is up
+  if (started || !stone3d || !stone3d.drawn) wake();
 }
 function wake() { if (!raf) raf = requestAnimationFrame(tick); }
-window.addEventListener('resize', wake);
+window.addEventListener('resize', () => { if (scrollMode) measureSlides(); wake(); });
 
-function go(id, { silent = false, fromHash = false } = {}) {
+function updateIndicators(p) {
+  const n = enabledSections(cfg).length;
+  const timeline = $('.timeline', ui);
+  if (timeline) timeline.style.setProperty('--p', String(n > 1 ? clamp(p / (n - 1), 0, 1) : 0));
+  ui.querySelectorAll('.stop').forEach((b) => b.setAttribute('aria-current', b.dataset.go === current ? 'true' : 'false'));
+  document.body.classList.toggle('in-section', scrollMode ? p > 0.35 : current !== 'intro');
+}
+
+function setHash(id) {
+  if (PREVIEW) return;
+  try { history.replaceState(null, '', location.pathname + location.search + (id === 'intro' ? '' : '#' + id)); } catch (e) { /* ignore */ }
+}
+
+function go(id, { silent = false, fromHash = false, instant = false } = {}) {
   const list = enabledSections(cfg);
-  const idx = list.findIndex((s) => s.id === id);
-  if (idx < 0) return;
+  if (!list.some((s) => s.id === id)) return;
+  if (scrollMode) {
+    const sl = slides.find((x) => x.id === id);
+    if (sl) window.scrollTo({ top: sl.top, behavior: instant || reduce || silent ? 'auto' : 'smooth' });
+    return;
+  }
   const changed = id !== current;
   current = id;
-  if (changed && !reduce && started && !silent) boost = 1.8 * (fx().spin / 50);
   wake();
-  const timeline = $('.timeline', ui);
-  if (timeline) timeline.style.setProperty('--p', String(list.length > 1 ? idx / (list.length - 1) : 0));
-  ui.querySelectorAll('.stop').forEach((b) => b.setAttribute('aria-current', b.dataset.go === id ? 'true' : 'false'));
+  updateIndicators(indexOf(id));
   ui.querySelectorAll('.panel').forEach((p) => {
     const on = p.dataset.id === id;
     p.classList.toggle('is-active', on);
@@ -152,29 +271,90 @@ function go(id, { silent = false, fromHash = false } = {}) {
     if (on) p.removeAttribute('inert'); else p.setAttribute('inert', '');
     if (on && changed) p.scrollTop = 0;
   });
-  document.body.classList.toggle('in-section', id !== 'intro');
   if (id === 'gallery') loadInstagram();
-  if (!fromHash && !silent && !PREVIEW) {
-    try { history.replaceState(null, '', location.pathname + location.search + (id === 'intro' ? '' : '#' + id)); } catch (e) { /* ignore */ }
-  }
+  if (!fromHash && !silent) setHash(id);
 }
 
-/* pointer: parallax on move, scrub the turntable on drag */
-function seek(tm) {
-  if (video.seeking) { pendingSeek = tm; return; }
-  try { video.currentTime = tm; } catch (e) { /* ignore */ }
+function step(d) {
+  const ids = enabledSections(cfg).map((s) => s.id);
+  const i = ids.indexOf(current);
+  const j = clamp(i + d, 0, ids.length - 1);
+  if (j !== i) go(ids[j]);
 }
-video.addEventListener('seeked', () => {
-  if (pendingSeek !== null) { const tm = pendingSeek; pendingSeek = null; try { video.currentTime = tm; } catch (e) { /* ignore */ } }
-});
+
+/* phones: the sections are slides; scrolling drives the camera */
+function measureSlides() {
+  slides = [...ui.querySelectorAll('.intro-slide, .panel')].map((el) => ({ id: el.dataset.id, top: el.offsetTop }));
+  onScroll();
+}
+let hashTimer = 0;
+function onScroll() {
+  if (!scrollMode || !slides.length) return;
+  const y = window.scrollY, H = window.innerHeight;
+  let p = slides.length - 1;
+  for (let k = 0; k < slides.length - 1; k++) {
+    const a = slides[k].top, b = slides[k + 1].top;
+    if (y < b) { const start = Math.max(a, b - H); p = k + clamp((y - start) / Math.max(1, b - start), 0, 1); break; }
+  }
+  scrollP = p;
+  const id = slides[Math.round(p)].id;
+  if (id !== current) {
+    current = id;
+    if (id === 'gallery') loadInstagram();
+    clearTimeout(hashTimer);
+    hashTimer = setTimeout(() => setHash(current), 400);
+  }
+  updateIndicators(p);
+  wake();
+}
+window.addEventListener('scroll', onScroll, { passive: true });
+
+function applyMode() {
+  scrollMode = narrowMQ.matches;
+  document.body.classList.toggle('scroll-mode', scrollMode);
+  if (scrollMode) {
+    ui.querySelectorAll('.panel').forEach((p) => { p.removeAttribute('inert'); p.setAttribute('aria-hidden', 'false'); p.classList.add('is-active'); });
+    requestAnimationFrame(measureSlides);
+  } else {
+    window.scrollTo(0, 0);
+    go(current, { silent: true });
+  }
+  wake();
+}
+narrowMQ.addEventListener ? narrowMQ.addEventListener('change', () => { const keep = current; applyMode(); if (scrollMode) requestAnimationFrame(() => go(keep, { instant: true })); }) : null;
+
+/* desktop: wheel and arrow keys move between sections */
+const wheel = { acc: 0, armed: true, last: 0, lock: 0 };
+function canScroll(el, dy) {
+  return dy > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0;
+}
+window.addEventListener('wheel', (e) => {
+  if (scrollMode || !started || !overlay.hidden) return;
+  const gate = $('#gate');
+  if (gate && !gate.classList.contains('gone')) return;
+  const panel = e.target.closest && e.target.closest('.panel');
+  if (panel && canScroll(panel, e.deltaY)) return;
+  const now = performance.now();
+  if (now - wheel.last > 220) { wheel.armed = true; wheel.acc = 0; }
+  wheel.last = now;
+  if (!wheel.armed || now < wheel.lock) return;
+  const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY;
+  wheel.acc += dy;
+  if (Math.abs(wheel.acc) > 60) { step(Math.sign(wheel.acc)); wheel.armed = false; wheel.acc = 0; wheel.lock = now + 650; }
+}, { passive: true });
+
+/* pointer: turn and tilt the stone by dragging; it keeps spinning when let go */
 window.addEventListener('pointermove', (e) => {
-  if (drag) {
-    const dur = video.duration || 20;
-    const perPx = dur / Math.max(300, stone.offsetWidth * 2.4);
-    let tm = drag.t + (e.clientX - drag.x) * perPx;
-    tm = ((tm % dur) + dur) % dur;
-    seek(tm);
+  if (drag && e.pointerId === drag.id) {
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    const k = TAU / Math.max(700, stone.offsetWidth * 2.6);
+    const dts = Math.max(0.008, (e.timeStamp - drag.t) / 1000);
+    m.drag += dx * k;
+    m.dragVel = 0.75 * m.dragVel + 0.25 * clamp((dx * k) / dts, -9, 9);
+    m.tilt = clamp(m.tilt - dy * 0.0032, -0.22, 0.22);
+    drag.x = e.clientX; drag.y = e.clientY; drag.t = e.timeStamp;
     document.body.classList.add('dragged');
+    wake();
     return;
   }
   if (e.pointerType === 'mouse') {
@@ -184,41 +364,21 @@ window.addEventListener('pointermove', (e) => {
   }
 });
 stage.addEventListener('pointerdown', (e) => {
-  if (!started) return;
-  drag = { x: e.clientX, t: video.currentTime || 0 };
-  wasPlaying = !video.paused;
-  video.pause();
+  if (!started || !stone3d) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp };
+  m.dragVel = 0;
   stage.classList.add('dragging');
 });
-const endDrag = () => {
-  if (!drag) return;
+const endDrag = (e) => {
+  if (!drag || (e && e.pointerId !== drag.id)) return;
+  if (e && e.timeStamp - drag.t > 90) m.dragVel = 0;
   drag = null;
   stage.classList.remove('dragging');
-  if (wasPlaying && !reduce) playVideo();
+  wake();
 };
 window.addEventListener('pointerup', endDrag);
 window.addEventListener('pointercancel', endDrag);
-
-function playVideo() { const pr = video.play(); if (pr && pr.catch) pr.catch(() => {}); }
-
-const sources = (() => {
-  const st = cfg.media.stone;
-  const c = navigator.connection || {};
-  const slow = !!c.saveData || /(^|-)2g|3g/.test(c.effectiveType || '');
-  const list = [];
-  if (video.canPlayType('video/mp4; codecs="avc1.64001F"')) list.push(safeUrl(slow && st.mp4Small ? st.mp4Small : st.mp4));
-  if (st.webm && video.canPlayType('video/webm; codecs="vp9"')) list.push(safeUrl(st.webm));
-  if (!list.length) list.push(safeUrl(st.mp4));
-  return list.filter(Boolean);
-})();
-let srcIndex = 0;
-video.muted = true;
-video.addEventListener('loadeddata', () => poster.classList.add('hide'));
-video.addEventListener('error', () => {
-  if (++srcIndex < sources.length) { video.src = sources[srcIndex]; if (started && !reduce) playVideo(); return; }
-  video.hidden = true; poster.classList.remove('hide');
-});
-if (sources.length) video.src = sources[0];
 
 /* ---------------- sound: the riff if one is uploaded, otherwise a low drone ---------------- */
 
@@ -504,6 +664,7 @@ function openOverlay(html, state) {
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   ui.setAttribute('inert', '');
+  document.body.classList.add('ov-open');
   ovState = state;
   $('.ov-close', overlay).focus({ preventScroll: true });
 }
@@ -512,6 +673,7 @@ function closeOverlay() {
   overlay.hidden = true;
   overlay.innerHTML = '';
   ui.removeAttribute('inert');
+  document.body.classList.remove('ov-open');
   ovState = null;
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
 }
@@ -602,8 +764,8 @@ function copyText(btn, text) {
 document.addEventListener('click', (e) => {
   const el = e.target.closest('button, a');
   if (!el) { if (e.target === overlay) closeOverlay(); return; }
-  if (el.id === 'startSound') return enter(true);
-  if (el.id === 'startQuiet') return enter(false);
+  if (el.id === 'startBtn') return enter(wantSound);
+  if (el.id === 'gateSound') { wantSound = !wantSound; syncGateSound(); return; }
   if (el.id === 'soundBtn') return setSound(!audio.on);
   if (el.classList.contains('ov-close')) {
     const resume = ovState && ovState.resume;
@@ -635,14 +797,23 @@ document.addEventListener('keydown', (e) => {
   const gate = $('#gate');
   if (gate && !gate.classList.contains('gone')) return;
   if (e.target.closest && e.target.closest('input, textarea, select')) return;
-  const ids = enabledSections(cfg).map((s) => s.id);
-  const i = ids.indexOf(current);
-  if (e.key === 'ArrowRight' && i < ids.length - 1) go(ids[i + 1]);
-  else if (e.key === 'ArrowLeft' && i > 0) go(ids[i - 1]);
+  if (e.key === 'ArrowRight') step(1);
+  else if (e.key === 'ArrowLeft') step(-1);
+  else if (!scrollMode && (e.key === 'ArrowDown' || e.key === 'PageDown')) { if (!(e.target.closest && e.target.closest('.panel') && canScroll(e.target.closest('.panel'), 1))) { e.preventDefault(); step(1); } }
+  else if (!scrollMode && (e.key === 'ArrowUp' || e.key === 'PageUp')) { if (!(e.target.closest && e.target.closest('.panel') && canScroll(e.target.closest('.panel'), -1))) { e.preventDefault(); step(-1); } }
   else if (e.key === 'Escape') go('intro');
 });
 
 /* ---------------- boot ---------------- */
+
+let wantSound = true;
+function syncGateSound() {
+  const b = $('#gateSound');
+  if (!b) return;
+  b.setAttribute('aria-pressed', wantSound ? 'true' : 'false');
+  const label = $('span', b);
+  if (label) label.textContent = wantSound ? b.dataset.on : b.dataset.off;
+}
 
 function enter(withSound) {
   const gate = $('#gate');
@@ -651,25 +822,32 @@ function enter(withSound) {
     gate.setAttribute('aria-hidden', 'true');
     gate.setAttribute('inert', '');
   }
+  document.body.classList.remove('gated');
   if (withSound) setSound(true);
   started = true;
+  startedAt = performance.now();
   stage.classList.add('lit');
-  if (!reduce) playVideo();
+  if (!stone3d && !reduce) playVideo();
   wake();
+  if (scrollMode) measureSlides();
   const h = (location.hash || '').slice(1);
-  if (!PREVIEW && h && h !== 'intro' && enabledSections(cfg).some((s) => s.id === h)) setTimeout(() => go(h, { fromHash: true }), 900);
+  if (!PREVIEW && h && h !== 'intro' && enabledSections(cfg).some((s) => s.id === h)) setTimeout(() => go(h, { fromHash: true }), scrollMode ? 300 : 900);
 }
 
 function showGate() {
   gateRoot.innerHTML = renderGate(cfg, lang);
+  syncGateSound();
+  document.body.classList.add('gated');
 }
 
+if (!PREVIEW) document.body.classList.add('gated');
 if (lang !== document.documentElement.lang) renderAll();
 else {
   const banner = $('.banner', ui);
   if (banner && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
-  go('intro', { silent: true });
+  applyMode();
 }
+wake();
 
 if (PREVIEW) {
   enter(false);
@@ -687,6 +865,7 @@ if (PREVIEW) {
     else {
       const gate = $('#gate');
       if (gate && !gate.classList.contains('gone')) { gate.classList.add('gone'); gate.setAttribute('inert', ''); }
+      document.body.classList.remove('gated');
     }
     if (focus && focus !== 'gate' && enabledSections(cfg).some((s) => s.id === focus)) current = focus;
     renderAll();

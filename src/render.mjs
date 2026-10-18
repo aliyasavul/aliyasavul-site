@@ -87,7 +87,7 @@ export const DEFAULTS = {
     tagline: bi('Elektro gitar · Ders · Session · Kayıt · Aranje', 'Electric guitar · Lessons · Session · Recording · Arrangement'),
     start: bi('Başlamak için tıkla', 'Click to start'),
     note: bi('Ses açık', 'Sound on'),
-    quiet: bi('Sessiz gir', 'Enter without sound'),
+    noteOff: bi('Ses kapalı', 'Sound off'),
   },
   header: { cta: { label: bi('Ders al', 'Book a lesson'), target: 'lessons' } },
   banner: { enabled: false, text: bi('Kasım için 2 öğrenci yeri kaldı.', '2 student spots left for November.'), linkLabel: bi('Yer ayırt', 'Save a spot'), link: '' },
@@ -177,6 +177,7 @@ export const DEFAULTS = {
     soundOn: bi('Sesi aç', 'Sound on'),
     soundMute: bi('Sesi kapat', 'Sound off'),
     dragHint: bi('Kehribarı çevirmek için sürükle', 'Drag to turn the amber'),
+    scrollHint: bi('Kaydır', 'Scroll'),
     copy: bi('Kopyala', 'Copy'),
     copied: bi('Kopyalandı', 'Copied'),
     selected: bi('Seçildi', 'Selected'),
@@ -534,10 +535,12 @@ export function renderUI(cfg, lang) {
     '<svg viewBox="0 0 56 20" aria-hidden="true"><g class="amp"><path class="w" d="M0 10 Q 3.75 2 7.5 10 T 15 10 T 22.5 10 T 30 10 T 37.5 10 T 45 10 T 52.5 10 T 60 10 T 67.5 10 T 75 10 T 82.5 10 T 90 10"/></g></svg></button></div>';
   html += '</div>';
 
+  // on phones the sections become slides you scroll through; this first empty slide is the intro
+  html += '<div class="intro-slide" data-id="intro" aria-hidden="true"><span class="scroll-cue">' + esc(S('scrollHint')) + '</span></div>';
   secs.slice(1).forEach((s, i) => {
     const side = (i + 1) % 2 === 1 ? 'left' : 'right';
     const wide = s.id === 'work' || s.id === 'gallery' ? ' data-wide="1"' : '';
-    html += '<section class="panel" id="p-' + s.id + '" data-id="' + s.id + '" data-side="' + side + '"' + wide + ' aria-labelledby="h-' + s.id + '" aria-hidden="true" inert>' + panelInner(cfg, s, lang) + '</section>';
+    html += '<section class="panel" id="p-' + s.id + '" data-id="' + s.id + '" data-side="' + side + '"' + wide + ' aria-labelledby="h-' + s.id + '" aria-hidden="true" inert><div class="pin">' + panelInner(cfg, s, lang) + '</div></section>';
   });
   return html;
 }
@@ -550,9 +553,10 @@ export function renderGate(cfg, lang) {
     '<h1 id="gateTitle" class="sr-only">' + esc(cfg.site.name) + '</h1>' +
     '<span class="logo gate-logo" role="img" aria-label="' + esc(cfg.site.name) + '"></span>' +
     '<p class="gate-sub">' + esc(L(cfg.gate.tagline)) + '</p>' +
-    '<button type="button" class="gate-start" id="startSound">' + esc(L(cfg.gate.start)) + '</button>' +
-    '<p class="gate-note"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>' + esc(L(cfg.gate.note)) + '</p>' +
-    '<button type="button" class="gate-quiet" id="startQuiet">' + esc(L(cfg.gate.quiet)) + '</button>' +
+    '<button type="button" class="gate-start" id="startBtn">' + esc(L(cfg.gate.start)) + '</button>' +
+    '<button type="button" class="gate-sound" id="gateSound" aria-pressed="true" data-on="' + esc(L(cfg.gate.note)) + '" data-off="' + esc(L(cfg.gate.noteOff)) + '">' +
+    '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="w1" d="M16.5 8.5a5 5 0 0 1 0 7"/><path class="w2" d="M19 6a8.5 8.5 0 0 1 0 12"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>' +
+    '<span>' + esc(L(cfg.gate.note)) + '</span></button>' +
     '</div>';
 }
 
@@ -603,6 +607,8 @@ export function renderHead(cfg, lang) {
     '<link rel="stylesheet" href="/css/site.css">',
     '<style id="theme-css">' + themeCSS(cfg) + '</style>',
     '<link rel="preload" as="image" href="' + esc(safeUrl(cfg.media.stone.poster) || DEFAULTS.media.stone.poster) + '">',
+    '<link rel="preload" as="image" href="/assets/amber/depth.webp">',
+    '<link rel="preload" as="fetch" href="/assets/amber/c000.webp" crossorigin>',
     '<script type="application/ld+json">' + JSON.stringify(ld).replace(/</g, '\\u003c') + '</script>',
     '<script type="module" src="/js/site.js"></script>',
   ].join('\n');
@@ -615,8 +621,9 @@ export function renderPage(cfg, lang) {
   const data = JSON.stringify(cfg).replace(/</g, '\\u003c');
   return '<!doctype html>\n<html lang="' + lang + '">\n<head>\n' + renderHead(cfg, lang) + '\n<noscript><style>.gate{display:none}.panel{position:relative!important;inset:auto!important;width:auto!important;max-height:none!important;margin:24px auto;max-width:640px;opacity:1!important;visibility:visible!important;transform:none!important}.stage,.mark{position:relative}body{overflow:auto}</style></noscript>\n</head>\n' +
     '<body>\n' +
-    '<div class="stage" id="stage"><div class="stone" id="stone">' +
-    '<video id="amberVideo" muted loop playsinline webkit-playsinline preload="auto" disablepictureinpicture disableremoteplayback aria-label="' + esc(L(cfg.strings.stoneLabel)) + '"></video>' +
+    '<div class="stage" id="stage"><div class="stone" id="stone" role="img" aria-label="' + esc(L(cfg.strings.stoneLabel)) + '">' +
+    '<canvas id="stoneGL" aria-hidden="true"></canvas>' +
+    '<video id="amberVideo" muted loop playsinline webkit-playsinline preload="none" disablepictureinpicture disableremoteplayback aria-hidden="true" hidden></video>' +
     '<img class="poster" id="amberPoster" src="' + esc(poster) + '" alt="" width="720" height="900" fetchpriority="high">' +
     '<div class="glow" id="amberGlow" aria-hidden="true"></div></div></div>\n' +
     '<div class="mark" id="mark" aria-hidden="true"><span class="logo"></span><canvas id="markFx"></canvas></div>\n' +

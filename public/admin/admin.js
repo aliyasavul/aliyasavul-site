@@ -474,7 +474,7 @@ const COLOR_LABELS = {
 const PRESET_NAMES = { amber: 'Kehribar', bone: 'Kemik', blood: 'Kan', ash: 'Kül', toxic: 'Zehir' };
 const STRING_LABELS = {
   soundOff: 'Alt köşe: ses kapalıyken', nowPlaying: 'Alt köşe: ses açıkken', soundOn: 'Ses düğmesi: aç', soundMute: 'Ses düğmesi: kapat',
-  dragHint: 'Alttaki ipucu', copy: 'Kopyala düğmesi', copied: 'Kopyalandı mesajı', selected: 'Seçildi mesajı', email: 'E-posta etiketi',
+  dragHint: 'Alttaki ipucu (bilgisayar)', scrollHint: 'Kaydır ipucu (telefon)', copy: 'Kopyala düğmesi', copied: 'Kopyalandı mesajı', selected: 'Seçildi mesajı', email: 'E-posta etiketi',
   whatsapp: 'WhatsApp düğmesi', watch: 'Video izle etiketi', close: 'Kapat', prev: 'Önceki', next: 'Sonraki',
   backToStart: 'Logo düğmesi (sesli okuyucu)', sections: 'Menü açıklaması (sesli okuyucu)', stoneLabel: 'Taş videosu açıklaması (sesli okuyucu)',
   language: 'Dil', switchTo: 'Dil düğmesi açıklaması', instagram: 'Instagram başlığı', dismiss: 'Duyuruyu kapat (sesli okuyucu)',
@@ -577,7 +577,7 @@ function tabMedia() {
 function tabGate() {
   return [
     group('Giriş ekranı', 'Siteye girince ilk görünen ekran. Bu sekme açıkken önizlemede giriş ekranı görünür.',
-      fBi('gate.tagline', 'Logonun altındaki satır'), fBi('gate.start', 'Ana düğme'), fBi('gate.note', 'Düğmenin altındaki not'), fBi('gate.quiet', 'Sessiz giriş bağlantısı')),
+      fBi('gate.tagline', 'Logonun altındaki satır'), fBi('gate.start', 'Ana düğme'), fBi('gate.note', 'Ses düğmesi: açıkken'), fBi('gate.noteOff', 'Ses düğmesi: kapalıyken', { hint: 'Ziyaretçi bu yazıya tıklayarak sesi açıp kapatır, sonra ana düğmeyle girer.' })),
     group('Sağ üstteki düğme', 'Her ekranda sağ üstte duran düğme.', fBi('header.cta.label', 'Düğme yazısı'), fSelect('header.cta.target', 'Tıklayınca', targetOptions())),
   ];
 }

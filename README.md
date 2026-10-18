@@ -14,6 +14,7 @@ Dosyalar en fazla 24 MB olabilir. Fotoğraflar yüklenirken otomatik küçültü
 
 - `content/site.json`: Sitedeki her şey (yazılar TR/EN, renkler, yazı tipleri, videolar, fotoğraflar). Panel bu dosyayı değiştirir.
 - `public/`: Sitenin görsel dosyaları, kodu ve admin paneli. Panelden yüklenen dosyalar `public/uploads/` içine gelir.
+- `public/assets/amber/`: 3D kehribar. Taş 120 açıdan render edildi (`c000`–`c119`) ve her açının derinlik haritası `depth.webp` içinde; `public/js/stone.js` bunlarla taşı gerçek zamanlı çevirir. 3D açılamayan cihazlarda `amber.mp4` videosu oynar.
 - `src/render.mjs`: `site.json`'u sayfaya çeviren kod (hem yayın sırasında hem tarayıcıda kullanılır).
 - `src/worker.js`: GitHub ile giriş ve panelin kaydetme işlemleri (Cloudflare Worker).
 - `scripts/build.mjs`: Yayın sırasında Türkçe (`/`) ve İngilizce (`/en/`) sayfaları hazırlar.
