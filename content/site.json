@@ -1,8 +1,8 @@
 {
   "version": 1,
   "meta": {
-    "rev": "initial",
-    "updatedAt": "2026-10-18T14:28:53.940Z"
+    "rev": "mveewqi7-go2fvg",
+    "updatedAt": "2026-10-18T22:43:50.959Z"
   },
   "site": {
     "name": "Ali Yasavul",
@@ -36,14 +36,25 @@
       "bannerBackground": "#e9a14b",
       "bannerText": "#0a0705",
       "logo": "#f2efe8",
-      "glow": "#ffa03c"
+      "glow": "#ffa03c",
+      "timeline": "#ffc36a"
     },
     "effects": {
-      "glitch": 50,
+      "glitch": 24,
       "glow": 50,
       "spin": 50,
       "parallax": 50
+    },
+    "stone": {
+      "preset": "natural",
+      "hue": 0,
+      "saturation": 100,
+      "brightness": 100
     }
+  },
+  "themes": {
+    "auto": true,
+    "list": []
   },
   "media": {
     "logo": {
@@ -78,6 +89,10 @@
     "note": {
       "tr": "Ses açık",
       "en": "Sound on"
+    },
+    "noteOff": {
+      "tr": "Ses kapalı",
+      "en": "Sound off"
     },
     "quiet": {
       "tr": "Sessiz gir",
@@ -302,7 +317,9 @@
           }
         }
       ],
-      "videos": []
+      "videos": [],
+      "recordings": [],
+      "tracks": []
     },
     {
       "id": "gallery",
@@ -326,9 +343,9 @@
       },
       "images": [],
       "instagram": {
-        "enabled": false,
-        "profile": "",
-        "feedUrl": "",
+        "enabled": true,
+        "profile": "http://instagram.com/aliyasavul95",
+        "feedUrl": "https://feeds.behold.so/VYbrlwC1y8zaRfHdeUhJ",
         "count": 6,
         "label": {
           "tr": "Instagram'da takip et",
@@ -374,11 +391,11 @@
       "links": [
         {
           "label": "Instagram",
-          "url": ""
+          "url": "http://instagram.com/aliyasavul95"
         },
         {
           "label": "YouTube",
-          "url": ""
+          "url": "https://www.youtube.com/@aliyasavul"
         },
         {
           "label": "Spotify",
@@ -408,6 +425,10 @@
       "tr": "Kehribarı çevirmek için sürükle",
       "en": "Drag to turn the amber"
     },
+    "scrollHint": {
+      "tr": "Kaydır",
+      "en": "Scroll"
+    },
     "copy": {
       "tr": "Kopyala",
       "en": "Copy"
@@ -431,6 +452,34 @@
     "watch": {
       "tr": "İzle",
       "en": "Watch"
+    },
+    "listen": {
+      "tr": "Dinle",
+      "en": "Listen"
+    },
+    "onSpotify": {
+      "tr": "Spotify'da",
+      "en": "On Spotify"
+    },
+    "openSpotify": {
+      "tr": "Spotify'da aç",
+      "en": "Open in Spotify"
+    },
+    "recordings": {
+      "tr": "Kayıtlar",
+      "en": "Recordings"
+    },
+    "play": {
+      "tr": "Çal",
+      "en": "Play"
+    },
+    "pause": {
+      "tr": "Duraklat",
+      "en": "Pause"
+    },
+    "seek": {
+      "tr": "Şarkıda ilerle",
+      "en": "Seek"
     },
     "close": {
       "tr": "Kapat",
