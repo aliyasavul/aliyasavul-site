@@ -201,3 +201,22 @@ dialog .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap
   .pv-head .close-pv { display: inline-flex; }
 }
 .close-pv { display: none; }
+
+/* back to the original */
+.group > .g-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 4px; }
+.group > .g-top h3 { margin: 0; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--text); }
+.btn.reset { min-height: 26px; padding: 0 8px; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.btn.reset:hover:not(:disabled) { color: var(--text); }
+.btn.reset:disabled { opacity: .6; color: var(--ok); border-color: var(--line); }
+.btn.reset svg.i { width: 14px; height: 14px; }
+.picks { display: grid; gap: 6px; }
+.pick { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: start; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); cursor: pointer; }
+.pick input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); }
+.pick b { display: block; font-size: 13px; }
+.pick small { display: block; color: var(--dim); font-size: 12px; }
+.pick em { font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--accent); white-space: nowrap; }
+.pick.done { cursor: default; opacity: .62; }
+.pick.done em { color: var(--ok); }
+ul.plain { margin: 0 0 14px; padding-left: 18px; color: var(--text); }
+.toast.has-act { display: flex; align-items: center; gap: 14px; pointer-events: auto; }
+.toast-act { flex: none; padding: 4px 10px; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; font-weight: 700; cursor: pointer; }

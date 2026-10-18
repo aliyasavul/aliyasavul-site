@@ -56,10 +56,13 @@ function icon(name) {
 }
 
 let toastTimer = 0;
-function toast(msg, { error = false, ms = 3600 } = {}) {
+// `action` adds a button to the message, for example { label: 'Geri al', fn }
+function toast(msg, { error = false, ms = 3600, action = null } = {}) {
   const el = $('#toast');
   el.textContent = msg;
+  if (action) el.append(h('button', { type: 'button', class: 'toast-act', onclick: () => { el.classList.remove('show'); action.fn(); } }, action.label));
   el.classList.toggle('err', error);
+  el.classList.toggle('has-act', !!action);
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), ms);
@@ -161,6 +164,7 @@ const isDirty = () => !!S.draft && !same(S.draft, S.published);
 let pvTimer = 0, draftTimer = 0;
 function changed({ rerender = false } = {}) {
   updateStatus();
+  if (!rerender) refreshResets();
   clearTimeout(pvTimer); pvTimer = setTimeout(() => postPreview(), 90);
   clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 700);
   if (rerender) renderTab();
@@ -312,6 +316,10 @@ const lbl = (id, text, extra) => h('label', { class: 'f-l', for: id }, text, ext
 const help = (text) => (text ? h('div', { class: 'f-h', text }) : null);
 function group(title, gh_, ...kids) {
   return h('section', { class: 'group' }, title ? h('h3', { text: title }) : null, gh_ ? h('p', { class: 'gh', text: gh_ }) : null, ...kids);
+}
+// a group with a small button next to its title (an "İlk haline döndür" button)
+function groupA(title, gh_, action, ...kids) {
+  return h('section', { class: 'group' }, h('div', { class: 'g-top' }, h('h3', { text: title }), action), gh_ ? h('p', { class: 'gh', text: gh_ }) : null, ...kids);
 }
 
 function fText(path, label, { type = 'text', placeholder = '', hint = '', onCommit, inputmode } = {}) {
@@ -495,6 +503,80 @@ function targetOptions() {
   ];
 }
 
+/* ======================= back to how it was first published ======================= */
+
+// The site as it was first published. Every "İlk haline döndür" puts values back from here.
+const ORIGINAL = normalize({});
+const getIn = (obj, path) => path.split('.').reduce(step, obj);
+function setIn(obj, path, value) {
+  const parts = path.split('.');
+  const last = parts.pop();
+  const parent = parts.reduce(step, obj);
+  if (parent != null) parent[last] = value;
+}
+const MENU_KEYS = ['enabled', 'nav', 'stamp', 'era'];
+const contentPaths = (id) => Object.keys(DEFAULTS.sections.find((s) => s.id === id) || {}).filter((k) => k !== 'id' && !MENU_KEYS.includes(k)).map((k) => 'sections.@' + id + '.' + k);
+const RESETS = [
+  { id: 'colors', look: true, label: 'Renkler', hint: 'Bütün renkler ilk tema olan “Kehribar”a döner.', paths: ['theme.colors', 'theme.preset'] },
+  { id: 'stone', look: true, label: 'Taşın rengi', hint: 'Doğal kehribar rengi.', paths: ['theme.stone'] },
+  { id: 'fonts', look: true, label: 'Yazı tipleri', paths: ['theme.fonts'] },
+  { id: 'effects', look: true, label: 'Efektler', hint: 'Logo glitch, ışıltı, kameranın dönüşü ve mouse ile kayma.', paths: ['theme.effects'] },
+  { id: 'sound', look: true, label: 'Ses seviyesi ve parça adı', hint: 'Yüklediğin riff silinmez.', paths: ['audio.volume', 'audio.title'] },
+  { id: 'logo', look: true, label: 'Logo', hint: 'İlk logo geri gelir.', paths: ['media.logo'] },
+  { id: 'gate', label: 'Giriş ekranı ve sağ üst düğme', paths: ['gate', 'header'] },
+  {
+    id: 'menu', label: 'Menü ve bölümler', hint: 'Bölümlerin sırası, görünürlüğü, menüdeki adları ve rakamları. Bölümlerin içerikleri değişmez.',
+    pick: (d) => ({ intro: d.intro, list: d.sections.map((s) => [s.id, ...MENU_KEYS.map((k) => s[k])]) }),
+    apply: (d) => {
+      d.intro = clone(ORIGINAL.intro);
+      const byId = new Map(d.sections.map((s) => [s.id, s]));
+      d.sections = ORIGINAL.sections.map((o) => { const s = byId.get(o.id) || clone(o); for (const k of MENU_KEYS) s[k] = clone(o[k]); return s; });
+    },
+  },
+  { id: 'about', label: 'Hakkımda', hint: 'Başlık, yazı ve bilgi satırları örnek haline döner.', paths: contentPaths('about') },
+  { id: 'lessons', label: 'Dersler', hint: 'Paketler ve fiyatlar da örnek haline döner.', paths: contentPaths('lessons') },
+  { id: 'work', label: 'Portfolyo', hint: 'Eklediğin YouTube videoları listeden çıkar.', paths: contentPaths('work') },
+  { id: 'gallery', label: 'Galeri ve Instagram', hint: 'Eklediğin fotoğraflar listeden çıkar.', paths: contentPaths('gallery') },
+  { id: 'contact', label: 'İletişim', hint: 'E-posta, WhatsApp, takvim ve sosyal medya linkleri.', paths: contentPaths('contact') },
+  { id: 'banner', label: 'Duyuru bandı', paths: ['banner'] },
+  { id: 'seo', label: 'Google ve paylaşım', paths: ['site.title', 'site.description', 'site.shareImage', 'site.defaultLang'] },
+  { id: 'strings', label: 'Küçük yazılar', paths: ['strings'] },
+];
+const areaOf = (x) => (typeof x === 'string' ? RESETS.find((r) => r.id === x) || { paths: [x] } : x);
+// compare only what the original has: leftovers from older versions of the site (like the old “Sessiz gir” text) do not count as a change
+const isPlain = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const project = (v, o) => (isPlain(v) && isPlain(o) ? Object.fromEntries(Object.keys(o).map((k) => [k, project(v[k], o[k])])) : v);
+const pickArea = (a, d) => (a.pick ? a.pick(d) : a.paths.map((p) => project(getIn(d, p), getIn(ORIGINAL, p))));
+function applyArea(a, d) { if (a.apply) a.apply(d); else for (const p of a.paths) setIn(d, p, clone(getIn(ORIGINAL, p))); }
+const atOriginal = (a) => same(pickArea(a, S.draft), pickArea(a, ORIGINAL));
+
+// Puts areas (or single settings) back to how the site was first published, with an undo.
+function resetToOriginal(list, what) {
+  const before = clone(S.draft);
+  for (const a of list) applyArea(a, S.draft);
+  changed({ rerender: true });
+  toast(what + ' ilk haline döndü. Yayınla’ya basana kadar sitede değişmez.', {
+    ms: 9000, action: { label: 'Geri al', fn: () => { S.draft = before; changed({ rerender: true }); toast('Geri alındı.'); } },
+  });
+}
+// reset buttons on the open tab follow the edits as they happen
+let liveResets = [];
+function refreshResets() { for (const paint of liveResets) paint(); }
+// the small button beside a group title; shows "İlk halinde" when there is nothing to undo
+function resetBtn(targets, what) {
+  const list = [].concat(targets).map(areaOf);
+  const btn = h('button', { type: 'button', class: 'btn small ghost reset', onclick: () => resetToOriginal(list, what) });
+  const paint = () => {
+    const done = list.every(atOriginal);
+    btn.disabled = done;
+    btn.title = done ? 'Bu ayarlar zaten en baştaki halinde' : 'En baştaki haline döndür';
+    btn.replaceChildren(icon(done ? 'check' : 'undo'), done ? 'İlk halinde' : 'İlk haline döndür');
+  };
+  paint();
+  liveResets.push(paint);
+  return btn;
+}
+
 function hiddenNote(id) {
   const s = get('sections.@' + id);
   if (!s || s.enabled) return null;
@@ -535,20 +617,29 @@ function stoneBox() {
 }
 
 function tabDesign() {
+  const look = ['colors', 'stone', 'fonts', 'effects'].map(areaOf);
+  const all = h('button', {
+    type: 'button', class: 'btn', onclick: async () => {
+      if (!(await dialog({ title: 'Bütün görünüm ilk haline dönsün mü?', body: 'Renkler, taşın rengi, yazı tipleri ve efektler en baştaki haline döner. Yazıların ve fotoğrafların değişmez. Sonra “Geri al” ile vazgeçebilirsin.', ok: 'İlk haline döndür' }))) return;
+      resetToOriginal(look, 'Bütün görünüm');
+    },
+  });
+  const paintAll = () => {
+    const done = look.every(atOriginal);
+    all.disabled = done;
+    all.replaceChildren(icon('undo'), done ? 'Görünüm zaten ilk halinde' : 'Bütün görünümü ilk haline döndür');
+  };
+  paintAll();
+  liveResets.push(paintAll);
   return [
-    group('Hazır renk temaları', 'Tek tıkla bütün renkleri değiştirir. Sonra tek tek renkleri de değiştirebilirsin.', presetsBox()),
-    group('Renkler', 'Kutucuğa tıklayıp renk seç ya da renk kodunu yaz (örneğin #e9a14b).',
+    group('Hazır renk temaları', 'Tek tıkla bütün renkleri değiştirir. Sonra tek tek renkleri de değiştirebilirsin. Sitenin ilk renkleri “Kehribar”.', presetsBox()),
+    groupA('Renkler', 'Kutucuğa tıklayıp renk seç ya da renk kodunu yaz (örneğin #e9a14b).', resetBtn('colors', 'Renkler'),
       h('div', { class: 'colors' }, COLOR_KEYS.map((k) => fColor('theme.colors.' + k, COLOR_LABELS[k][0], COLOR_LABELS[k][1])))),
-    group('Taşın rengi', 'Gerçek kehribar türlerinden biri seç ya da kaydırıcılarla ayarla. Taş her durumda doğal görünecek şekilde sınırlandı.', stoneBox()),
-    group('Yazı tipleri', 'Google Fonts’tan gelir. Listedekilerin hepsi Türkçe karakterleri destekliyor.',
+    groupA('Taşın rengi', 'Gerçek kehribar türlerinden biri seç ya da kaydırıcılarla ayarla. Taş her durumda doğal görünecek şekilde sınırlandı.', resetBtn('stone', 'Taşın rengi'), stoneBox()),
+    groupA('Yazı tipleri', 'Google Fonts’tan gelir. Listedekilerin hepsi Türkçe karakterleri destekliyor.', resetBtn('fonts', 'Yazı tipleri'),
       fFont('display', 'Başlıklar, menü ve düğmeler'), fFont('body', 'Metinler'), fFont('mono', 'Küçük etiketler ve tarihler')),
-    h('div', { class: 'row' }, h('button', {
-      type: 'button', class: 'btn', onclick: async () => {
-        if (!(await dialog({ title: 'Tasarım sıfırlansın mı?', body: 'Renkler ve yazı tipleri ilk haline döner. Yazıların değişmez.', ok: 'Sıfırla' }))) return;
-        S.draft.theme.colors = clone(DEFAULTS.theme.colors); S.draft.theme.fonts = clone(DEFAULTS.theme.fonts); S.draft.theme.preset = 'amber';
-        changed({ rerender: true });
-      },
-    }, icon('undo'), 'Renkleri ve yazı tiplerini sıfırla')),
+    h('div', { class: 'row' }, all),
+    h('p', { class: 'f-h', style: 'margin-top:10px', text: 'Yazılar ve diğer bölümler için “Diğer › İlk hale döndür” sekmesine bak.' }),
   ];
 }
 
@@ -568,13 +659,14 @@ function audioBox() {
 
 function tabEffects() {
   return [
-    group('Logo glitch', 'Mouse logonun üzerinde gezerken sadece o bölgede oluşan bozulma. Telefonda mouse olmadığı için görünmez. 0 yaparsan tamamen kapanır.',
+    groupA('Logo glitch', 'Mouse logonun üzerinde gezerken sadece o bölgede oluşan bozulma. Telefonda mouse olmadığı için görünmez. 0 yaparsan tamamen kapanır.',
+      resetBtn('theme.effects.glitch', 'Logo glitch'),
       fRange('theme.effects.glitch', 'Şiddet', { fmt: (v) => (v === 0 ? 'Kapalı' : String(v)) })),
-    group('Kehribar', null,
+    groupA('Kehribar', null, resetBtn(['theme.effects.glow', 'theme.effects.spin', 'theme.effects.parallax'], 'Kehribar ayarları'),
       fRange('theme.effects.glow', 'Işıltı', { hint: 'Taşın etrafındaki parlama; ses açıkken müzikle birlikte nabız atar.' }),
       fRange('theme.effects.spin', 'Bölüm geçişlerinde kameranın taşın etrafında dönmesi', { fmt: (v) => (v === 0 ? 'Yok' : String(v)) }),
       fRange('theme.effects.parallax', 'Mouse ile hafif kayma', { fmt: (v) => (v === 0 ? 'Yok' : String(v)) })),
-    group('Ses', 'Ziyaretçi “Başlamak için tıkla” deyince bu ses döngü halinde çalar.',
+    groupA('Ses', 'Ziyaretçi “Başlamak için tıkla” deyince bu ses döngü halinde çalar.', resetBtn('sound', 'Ses ayarları'),
       audioBox(), fBi('audio.title', 'Alt köşede görünen parça adı'), fRange('audio.volume', 'Ses seviyesi', { fmt: (v) => '%' + v })),
   ];
 }
@@ -879,6 +971,48 @@ function tabThemes() {
   ];
 }
 
+function tabReset() {
+  const picked = new Set();
+  const doBtn = h('button', { type: 'button', class: 'btn primary', disabled: true }, icon('undo'), 'Seçilenleri ilk haline döndür');
+  const sync = () => { doBtn.disabled = !picked.size; };
+  const row = (a) => {
+    const done = atOriginal(a);
+    const inp = h('input', { type: 'checkbox', disabled: done });
+    inp.addEventListener('change', () => { if (inp.checked) picked.add(a); else picked.delete(a); sync(); });
+    return h('label', { class: 'pick' + (done ? ' done' : '') }, inp,
+      h('span', null, h('b', { text: a.label }), a.hint ? h('small', { text: a.hint }) : null),
+      h('em', { text: done ? 'ilk halinde' : 'değişmiş' }));
+  };
+  const lookList = RESETS.filter((a) => a.look), textList = RESETS.filter((a) => !a.look);
+  const allBtn = (list) => h('button', {
+    type: 'button', class: 'btn small ghost', disabled: list.every(atOriginal), onclick: (e) => {
+      const btn = e.currentTarget;
+      const boxes = [...btn.closest('.group').querySelectorAll('input[type="checkbox"]:not(:disabled)')];
+      const on = boxes.some((b) => !b.checked);
+      boxes.forEach((b) => { b.checked = on; });
+      list.filter((a) => !atOriginal(a)).forEach((a) => (on ? picked.add(a) : picked.delete(a)));
+      btn.textContent = on ? 'Seçimi kaldır' : 'Hepsini seç';
+      sync();
+    },
+  }, 'Hepsini seç');
+  doBtn.addEventListener('click', async () => {
+    const list = RESETS.filter((a) => picked.has(a));
+    if (!list.length) return;
+    const body = h('div', null, h('p', { text: 'Şunlar en baştaki haline dönecek:' }), h('ul', { class: 'plain' }, list.map((a) => h('li', { text: a.label }))),
+      list.some((a) => !a.look) ? h('p', { class: 'note warn', text: 'Seçtiğin bölümlerdeki kendi yazdıkların yerine örnek yazılar gelir.' }) : null,
+      h('p', { text: 'Yayınla’ya basana kadar sitede hiçbir şey değişmez; “Geri al” ya da “Değişiklikleri at” ile vazgeçebilirsin.' }));
+    if (!(await dialog({ title: 'İlk haline dönsün mü?', body, ok: 'İlk haline döndür', danger: list.some((a) => !a.look) }))) return;
+    resetToOriginal(list, list.length === 1 ? list[0].label : 'Seçtiğin ' + list.length + ' alan');
+  });
+  return [
+    h('p', { class: 'note', text: 'Burada sitenin en baştaki, ilk yayınlandığı haline dönebilirsin. Değiştirdiğin alanların yanında “değişmiş” yazar. Seçip düğmeye basınca önce taslakta değişir, önizlemede görürsün; beğenirsen Yayınla’ya bas.' }),
+    groupA('Görünüm', 'Renkler, taş, yazı tipleri, efektler, ses ve logo.', allBtn(lookList), h('div', { class: 'picks' }, lookList.map(row))),
+    groupA('Yazılar ve içerik', 'Senin yazdıkların, fotoğrafların ve videoların yerine en baştaki örnek içerik gelir.', allBtn(textList), h('div', { class: 'picks' }, textList.map(row))),
+    h('div', { class: 'row' }, doBtn),
+    h('p', { class: 'f-h', style: 'margin-top:12px', text: 'Daha önce yayınladığın bir sürüme dönmek istersen: “Geçmiş sürümler”.' }),
+  ];
+}
+
 const TABS = [
   { id: 'design', group: 'Görünüm', label: 'Renk ve yazı tipi', focus: 'intro', render: tabDesign, lead: 'Sitenin renkleri, yazı tipleri ve taşın rengi. Değiştirdikçe sağda önizlemede görürsün.' },
   { id: 'themes', group: 'Görünüm', label: 'Temalar', focus: 'intro', render: tabThemes },
@@ -895,6 +1029,7 @@ const TABS = [
   { id: 'seo', group: 'Diğer', label: 'Google ve paylaşım', focus: null, render: tabSeo },
   { id: 'strings', group: 'Diğer', label: 'Küçük yazılar', focus: null, render: tabStrings },
   { id: 'history', group: 'Diğer', label: 'Geçmiş sürümler', focus: null, render: tabHistory },
+  { id: 'reset', group: 'Diğer', label: 'İlk hale döndür', focus: 'intro', render: tabReset, lead: 'Renkleri, ayarları ya da yazıları sitenin en baştaki haline döndür.' },
 ];
 
 /* ======================= shell ======================= */
@@ -905,6 +1040,7 @@ function renderTab() {
   const top = ed.scrollTop;
   const tab = TABS.find((x) => x.id === S.tab) || TABS[0];
   ed.innerHTML = '';
+  liveResets = [];
   ed.append(...[h('h1', { text: tab.label }), tab.lead ? h('p', { class: 'lead', text: tab.lead }) : null, ...[].concat(tab.render())].filter(Boolean));
   ed.scrollTop = top;
   document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-current', b.dataset.tab === S.tab ? 'true' : 'false'));
