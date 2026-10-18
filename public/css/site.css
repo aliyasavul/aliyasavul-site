@@ -35,9 +35,10 @@ a { color: inherit; }
 }
 
 /* stage */
-.stage { position: fixed; inset: 0; overflow: hidden; background: var(--bg); touch-action: none; cursor: grab; }
+.stage { position: fixed; inset: 0; overflow: hidden; background: var(--bg); touch-action: pan-y; cursor: grab; }
 .stage.dragging { cursor: grabbing; }
-.stone { position: absolute; left: 50%; top: 50%; height: min(94vh, 125vw); aspect-ratio: 4 / 5; transform: translate(-50%, -50%); will-change: transform; }
+/* the box is larger than the stone (the stone fills 78% of it) so the camera can come close without cropping */
+.stone { position: absolute; left: 50%; top: 50%; height: min(120vh, 160vw); aspect-ratio: 4 / 5; transform: translate(-50%, -50%); will-change: transform; }
 .stone canvas, .stone video, .stone .poster {
   position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; display: block; object-fit: cover;
   filter: brightness(0.16) saturate(0.7); transition: filter 2.8s cubic-bezier(.3, .6, .2, 1), opacity .6s ease;
@@ -45,10 +46,16 @@ a { color: inherit; }
 .stone canvas { opacity: 0; }
 .stone canvas.on { opacity: 1; }
 .stone video[hidden], .stone canvas[hidden] { display: none; }
-.stage.lit .stone canvas, .stage.lit .stone video, .stage.lit .stone .poster { filter: none; }
+.stone video, .stone .poster { transform: scale(0.78); }
+.stage.lit .stone canvas { filter: none; }
+/* the 3D stone is coloured in its shader; the video and poster fallbacks get the same colour as a filter */
+.stage.lit .stone video, .stage.lit .stone .poster { filter: var(--stone-filter, none); }
 .stone .poster.hide { opacity: 0; }
+/* nothing on the stage can be picked up and dragged away like a photo */
+.stage, .stage * { -webkit-user-select: none; user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none; }
+.stone .poster, .stone .glow, .stone video { pointer-events: none; }
 .stone .glow {
-  position: absolute; left: 22%; right: 22%; top: 20%; bottom: 20%; border-radius: 50%; pointer-events: none;
+  position: absolute; left: 28%; right: 28%; top: 26.5%; bottom: 26.5%; border-radius: 50%; pointer-events: none;
   background: radial-gradient(closest-side, var(--glow), transparent); mix-blend-mode: screen; opacity: var(--glow-base);
 }
 
@@ -92,13 +99,29 @@ a { color: inherit; }
 /* timeline */
 .timeline { position: relative; width: 100%; --n: 5; }
 .tl-track { position: absolute; left: calc(50% / var(--n)); right: calc(50% / var(--n)); top: 30px; height: 1px; background: var(--line); }
-.tl-fill { position: absolute; left: 0; top: 0; height: 1px; width: calc(100% * var(--p, 0)); background: linear-gradient(90deg, var(--accent-soft), var(--accent)); transition: width 1.6s cubic-bezier(.22, .7, .2, 1); }
+/* the marker is a light travelling along the line, not a solid ball: a hot core, a wide soft flare and a trail */
+.tl-fill {
+  position: absolute; left: 0; top: 0; height: 1px; width: calc(100% * var(--p, 0));
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--tl-light) 75%, transparent));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--tl-light) 45%, transparent);
+}
 .tl-mark {
-  position: absolute; top: 0; left: calc(100% * var(--p, 0)); width: 14px; height: 14px; border-radius: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle at 38% 34%, #fff7e6 0%, var(--accent) 48%, color-mix(in srgb, var(--accent) 55%, #000) 100%);
-  box-shadow: 0 0 16px 5px color-mix(in srgb, var(--accent) 50%, transparent);
-  transition: left 1.6s cubic-bezier(.22, .7, .2, 1);
+  position: absolute; top: 0; left: calc(100% * var(--p, 0)); width: 150px; height: 34px; pointer-events: none;
+  transform: translate(-50%, -50%); mix-blend-mode: screen;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tl-light) 85%, #fff) 0%, color-mix(in srgb, var(--tl-light) 55%, transparent) 13%, color-mix(in srgb, var(--tl-light) 14%, transparent) 42%, transparent 72%);
+  animation: tl-breathe 3.4s ease-in-out infinite;
+}
+.tl-mark::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 4px 1px #fff, 0 0 12px 4px var(--tl-light), 0 0 30px 12px color-mix(in srgb, var(--tl-light) 50%, transparent);
+}
+.tl-mark::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 1px; height: 28px; margin: -14px 0 0 0; opacity: .55;
+  background: linear-gradient(transparent, color-mix(in srgb, var(--tl-light) 80%, #fff), transparent);
+}
+@keyframes tl-breathe {
+  0%, 100% { opacity: .82; transform: translate(-50%, -50%) scale(.94, 1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.06, 1.1); }
 }
 .timeline ol { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
 .timeline li { display: flex; justify-content: center; min-width: 0; }
@@ -155,17 +178,43 @@ body.dragged .hint, body.in-section .hint { opacity: 0; }
 .sound[aria-pressed="false"] .w { animation-play-state: paused; }
 @keyframes wave { to { transform: translateX(-30px); } }
 
-/* panels */
-.panel {
-  position: fixed; top: 50%; z-index: 1; width: min(440px, 36vw); max-height: 70vh; overflow: auto; overscroll-behavior: contain;
-  opacity: 0; visibility: hidden; transform: translateY(-46%);
-  transition: opacity .5s ease, transform .9s cubic-bezier(.22, .7, .2, 1), visibility 0s linear .9s;
-  text-shadow: 0 1px 14px var(--shadow); scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+/* sections are slides you scroll through; the stone stays in place and the camera follows the scroll */
+html { scroll-snap-type: y proximity; }
+body { height: auto; min-height: 100%; overflow-x: hidden; overflow-y: auto; }
+body.gated, body.ov-open { overflow: hidden; }
+.intro-slide { display: block; position: relative; height: 100vh; height: 100svh; scroll-snap-align: start; pointer-events: none; }
+.scroll-cue {
+  position: absolute; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  display: none; justify-items: center; gap: 8px; font: 500 10px/1 var(--f-mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+  transition: opacity .5s;
 }
-.panel[data-wide] { width: min(560px, 42vw); max-height: 76vh; }
-.panel[data-side="left"] { left: calc(var(--gutter-l) + clamp(8px, 6vw, 110px)); }
-.panel[data-side="right"] { right: calc(var(--gutter-r) + clamp(8px, 6vw, 110px)); }
-.panel.is-active { opacity: 1; visibility: visible; transform: translateY(-50%); transition: opacity .9s ease .55s, transform 1.1s cubic-bezier(.22, .7, .2, 1) .45s, visibility 0s; }
+.scroll-cue::after { content: ""; width: 1px; height: 28px; background: linear-gradient(var(--muted), transparent); animation: cue 1.8s ease-in-out infinite; transform-origin: top; }
+body.in-section .scroll-cue, body.gated .scroll-cue { opacity: 0; }
+@keyframes cue { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+.panel {
+  position: relative; z-index: 1; display: flex; align-items: center; min-height: 100vh; min-height: 100svh;
+  padding: 130px var(--gutter-r) 110px var(--gutter-l); scroll-snap-align: start; pointer-events: none;
+}
+.panel[data-side="left"] { justify-content: flex-start; }
+.panel[data-side="right"] { justify-content: flex-end; }
+.pin {
+  pointer-events: auto; width: min(440px, 36vw); margin-inline: clamp(8px, 6vw, 110px); text-shadow: 0 1px 14px var(--shadow);
+  opacity: var(--vis, 1); transform: translate3d(0, calc((1 - var(--vis, 1)) * 36px), 0);
+}
+.panel[data-wide] .pin { width: min(560px, 42vw); }
+/* the fixed bars get a dark fade so text scrolling under them stays readable */
+.top, .bottom { position: relative; }
+.top::before, .bottom::before { content: ""; position: absolute; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .4s; }
+.top::before {
+  left: calc(-1 * var(--gutter-l)); right: calc(-1 * var(--gutter-r)); top: calc(-18px - env(safe-area-inset-top, 0px)); bottom: -26px;
+  background: linear-gradient(var(--bg) 62%, transparent);
+}
+.bottom::before {
+  left: calc(-1 * var(--gutter-l)); right: calc(-1 * var(--gutter-r)); top: -34px; bottom: calc(-16px - env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(transparent, var(--bg) 58%);
+}
+body.in-section .top::before, body.in-section .bottom::before { opacity: 1; }
+.tl-fill, .tl-mark { transition: none; }
 .era { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 14px; font: 400 12px/1.4 var(--f-mono); letter-spacing: 0.06em; color: var(--accent); font-variant-numeric: tabular-nums; }
 .era span + span { color: var(--muted); }
 .panel h2 { margin: 0 0 16px; font: 600 clamp(38px, 4.4vw, 60px)/0.95 var(--f-display); letter-spacing: 0.03em; text-transform: uppercase; text-wrap: balance; }
@@ -264,58 +313,24 @@ body.dragged .hint, body.in-section .hint { opacity: 0; }
 .gate-sound[aria-pressed="false"] .w1, .gate-sound[aria-pressed="false"] .w2 { display: none; }
 .gate-sound[aria-pressed="false"] .x { display: inline; }
 
-.intro-slide { display: none; }
 
-/* narrow screens: the sections become slides you scroll through; the stone stays in place above
-   them and the camera follows the scroll */
+/* narrow screens: the stone sits above the text, which rises over it as you scroll */
 @media (max-width: 760px), (max-aspect-ratio: 1/1) {
-  html { height: auto; scroll-snap-type: y proximity; }
-  body { height: auto; min-height: 100%; overflow-x: hidden; overflow-y: auto; }
-  body.gated, body.ov-open { overflow: hidden; }
-  .stage { touch-action: pan-y; }
-  .top { grid-template-columns: 1fr auto; position: relative; }
-  .top::before {
-    content: ""; position: absolute; z-index: -1; pointer-events: none;
-    left: calc(-1 * var(--gutter-l)); right: calc(-1 * var(--gutter-r)); top: calc(-18px - env(safe-area-inset-top, 0px)); bottom: -26px;
-    background: linear-gradient(var(--bg) 62%, transparent); opacity: 0; transition: opacity .4s;
-  }
-  body.in-section .top::before { opacity: 1; }
+  .top { grid-template-columns: 1fr auto; }
   .timeline { grid-column: 1 / -1; grid-row: 2; }
   .brand .logo { height: 30px; }
   .cta { padding: 0 14px; font-size: 13px; letter-spacing: 0.14em; }
   .stop .name { font-size: 11px; letter-spacing: 0.05em; }
   .stop .ma { font-size: 10px; letter-spacing: 0; }
   .hint { display: none; }
-  .bottom { grid-template-columns: 1fr auto; position: relative; }
-  .bottom::before {
-    content: ""; position: absolute; z-index: -1; pointer-events: none;
-    left: calc(-1 * var(--gutter-l)); right: calc(-1 * var(--gutter-r)); top: -34px; bottom: calc(-16px - env(safe-area-inset-bottom, 0px));
-    background: linear-gradient(transparent, var(--bg) 58%); opacity: 0; transition: opacity .4s;
-  }
-  body.in-section .bottom::before { opacity: 1; }
+  .bottom { grid-template-columns: 1fr auto; }
   .mark { bottom: calc(15vh + env(safe-area-inset-bottom, 0px)); }
-
-  .tl-fill, .tl-mark { transition: none; }
-  .intro-slide { display: block; position: relative; height: 100vh; height: 100svh; scroll-snap-align: start; pointer-events: none; }
-  .scroll-cue {
-    position: absolute; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
-    display: grid; justify-items: center; gap: 8px; font: 500 10px/1 var(--f-mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
-    transition: opacity .5s;
+  .scroll-cue { display: grid; }
+  .panel, .panel[data-side] {
+    display: block; padding: 46vh var(--gutter-r) calc(96px + env(safe-area-inset-bottom, 0px)) var(--gutter-l); padding-top: 46svh;
   }
-  .scroll-cue::after { content: ""; width: 1px; height: 28px; background: linear-gradient(var(--muted), transparent); animation: cue 1.8s ease-in-out infinite; transform-origin: top; }
-  body.in-section .scroll-cue, body.gated .scroll-cue { opacity: 0; }
-  @keyframes cue { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
-
-  .panel, .panel[data-side], .panel[data-wide] {
-    position: relative; top: auto; left: auto; right: auto; bottom: auto; z-index: 1;
-    width: auto; max-height: none; overflow: visible; min-height: 100vh; min-height: 100svh;
-    padding: 46vh var(--gutter-r) calc(96px + env(safe-area-inset-bottom, 0px)) var(--gutter-l);
-    padding-top: 46svh;
-    opacity: 1; visibility: visible; transform: none; transition: none; text-shadow: none;
-    scroll-snap-align: start; pointer-events: none;
-  }
-  .pin {
-    pointer-events: auto; padding: 18px 16px 20px; background: var(--scrim);
+  .pin, .panel[data-wide] .pin {
+    width: auto; margin: 0; padding: 18px 16px 20px; background: var(--scrim); text-shadow: none;
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-top: 1px solid var(--line);
   }
   .panel h2 { font-size: 34px; margin-bottom: 10px; }
@@ -327,6 +342,7 @@ body.dragged .hint, body.in-section .hint { opacity: 0; }
   .videos { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sound .w { animation: none !important; }
-  .tl-fill, .tl-mark, .panel, .panel.is-active, .mark, .gate, .stone video, .stone .poster { transition-duration: .01s !important; transition-delay: 0s !important; }
+  .sound .w, .tl-mark { animation: none !important; }
+  .mark, .gate, .stone video, .stone .poster { transition-duration: .01s !important; transition-delay: 0s !important; }
+  .pin { transform: none !important; }
 }

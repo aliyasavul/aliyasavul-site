@@ -45,15 +45,25 @@ const FALLBACK_STACK = {
 
 export const COLOR_KEYS = [
   'background', 'text', 'muted', 'accent', 'accentText', 'line', 'panel',
-  'bannerBackground', 'bannerText', 'logo', 'glow',
+  'bannerBackground', 'bannerText', 'logo', 'glow', 'timeline',
 ];
 
 export const PRESETS = {
-  amber: { background: '#000000', text: '#ece4d6', muted: '#a59b8a', accent: '#e9a14b', accentText: '#0a0705', line: '#ece4d6', panel: '#050403', bannerBackground: '#e9a14b', bannerText: '#0a0705', logo: '#f2efe8', glow: '#ffa03c' },
-  bone: { background: '#050505', text: '#eeeae2', muted: '#9c968b', accent: '#d9ccb4', accentText: '#0b0a08', line: '#eeeae2', panel: '#0a0a09', bannerBackground: '#d9ccb4', bannerText: '#0b0a08', logo: '#f4f1ea', glow: '#ffc27a' },
-  blood: { background: '#030101', text: '#efe6e1', muted: '#a8928c', accent: '#c4202c', accentText: '#fff3ef', line: '#efe6e1', panel: '#0a0303', bannerBackground: '#8f141c', bannerText: '#fff3ef', logo: '#f3ece8', glow: '#ff6a3c' },
-  ash: { background: '#0b0b0c', text: '#e6e6e6', muted: '#8e8e93', accent: '#f0f0f0', accentText: '#0b0b0c', line: '#e6e6e6', panel: '#111113', bannerBackground: '#e6e6e6', bannerText: '#0b0b0c', logo: '#ffffff', glow: '#ffb060' },
-  toxic: { background: '#020302', text: '#e7ecdf', muted: '#94a088', accent: '#a6d84b', accentText: '#071003', line: '#e7ecdf', panel: '#060a04', bannerBackground: '#a6d84b', bannerText: '#071003', logo: '#f0f5e8', glow: '#d8ff6a' },
+  amber: { background: '#000000', text: '#ece4d6', muted: '#a59b8a', accent: '#e9a14b', accentText: '#0a0705', line: '#ece4d6', panel: '#050403', bannerBackground: '#e9a14b', bannerText: '#0a0705', logo: '#f2efe8', glow: '#ffa03c', timeline: '#ffc36a' },
+  bone: { background: '#050505', text: '#eeeae2', muted: '#9c968b', accent: '#d9ccb4', accentText: '#0b0a08', line: '#eeeae2', panel: '#0a0a09', bannerBackground: '#d9ccb4', bannerText: '#0b0a08', logo: '#f4f1ea', glow: '#ffc27a', timeline: '#ffe4b8' },
+  blood: { background: '#030101', text: '#efe6e1', muted: '#a8928c', accent: '#c4202c', accentText: '#fff3ef', line: '#efe6e1', panel: '#0a0303', bannerBackground: '#8f141c', bannerText: '#fff3ef', logo: '#f3ece8', glow: '#ff6a3c', timeline: '#ff6b4a' },
+  ash: { background: '#0b0b0c', text: '#e6e6e6', muted: '#8e8e93', accent: '#f0f0f0', accentText: '#0b0b0c', line: '#e6e6e6', panel: '#111113', bannerBackground: '#e6e6e6', bannerText: '#0b0b0c', logo: '#ffffff', glow: '#ffb060', timeline: '#ffffff' },
+  toxic: { background: '#020302', text: '#e7ecdf', muted: '#94a088', accent: '#a6d84b', accentText: '#071003', line: '#e7ecdf', panel: '#060a04', bannerBackground: '#a6d84b', bannerText: '#071003', logo: '#f0f5e8', glow: '#d8ff6a', timeline: '#dcff7a' },
+};
+
+// natural kinds of amber: the colour shift keeps the stone believable
+export const STONE_PRESETS = {
+  natural: { hue: 0, saturation: 100, brightness: 100 },
+  honey: { hue: 10, saturation: 92, brightness: 108 },
+  cherry: { hue: -12, saturation: 112, brightness: 92 },
+  cognac: { hue: -6, saturation: 82, brightness: 84 },
+  lemon: { hue: 22, saturation: 106, brightness: 112 },
+  green: { hue: 48, saturation: 78, brightness: 98 },
 };
 
 const bi = (tr, en) => ({ tr, en });
@@ -77,7 +87,10 @@ export const DEFAULTS = {
     fonts: { display: 'Barlow Condensed', body: 'Barlow', mono: 'IBM Plex Mono' },
     colors: { ...PRESETS.amber },
     effects: { glitch: 50, glow: 50, spin: 50, parallax: 50 },
+    stone: { preset: 'natural', ...STONE_PRESETS.natural },
   },
+  // saved looks (for example a New Year theme) that can switch on by themselves between two dates
+  themes: { auto: true, list: [] },
   media: {
     logo: { src: '/assets/logo-white.webp', width: 1926, height: 816 },
     stone: { mp4: '/assets/amber.mp4', mp4Small: '/assets/amber-480.mp4', webm: '/assets/amber.webm', poster: '/assets/amber-poster.jpg' },
@@ -220,6 +233,48 @@ const HEX = /^#[0-9a-f]{6}$/i;
 const FONT_NAME = /^[A-Za-z0-9 ]{1,40}$/;
 const clampNum = (v, lo, hi, d) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
 
+const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+function sanitizeTheme(th) {
+  const base = DEFAULTS.theme;
+  for (const k of ['fonts', 'colors', 'effects', 'stone']) if (!isObj(th[k])) th[k] = clone(base[k]);
+  const c = th.colors;
+  for (const k of COLOR_KEYS) if (!HEX.test(String(c[k] || ''))) c[k] = base.colors[k];
+  const f = th.fonts;
+  for (const k of ['display', 'body', 'mono']) if (!FONT_NAME.test(String(f[k] || ''))) f[k] = base.fonts[k];
+  const e = th.effects;
+  for (const k of ['glitch', 'glow', 'spin', 'parallax']) e[k] = clampNum(e[k], 0, 100, base.effects[k]);
+  const st = th.stone;
+  st.hue = clampNum(st.hue, -60, 60, 0);
+  st.saturation = clampNum(st.saturation, 40, 160, 100);
+  st.brightness = clampNum(st.brightness, 70, 130, 100);
+  return th;
+}
+
+// the saved theme whose dates include today, if seasonal switching is on
+export function themeForDate(cfg, date = new Date()) {
+  const T = cfg.themes;
+  if (!T || !T.auto) return null;
+  const today = (date.getMonth() + 1) * 100 + date.getDate();
+  const num = (md) => (MD.test(md || '') ? Number(md.slice(0, 2)) * 100 + Number(md.slice(3)) : null);
+  for (const th of T.list) {
+    const a = num(th.from), b = num(th.to);
+    if (a == null || b == null) continue;
+    if (a <= b ? today >= a && today <= b : today >= a || today <= b) return th;
+  }
+  return null;
+}
+
+// the config as it looks with a saved theme on top
+export function withTheme(cfg, th) {
+  if (!th) return cfg;
+  const out = clone(cfg);
+  out.theme = sanitizeTheme(merge(clone(cfg.theme), th.theme || {}));
+  if (th.banner) out.banner = merge(clone(cfg.banner), th.banner);
+  out.activeTheme = th.id;
+  return out;
+}
+
 export function normalize(raw) {
   const src = isObj(raw) ? raw : {};
   const rest = { ...src };
@@ -237,12 +292,17 @@ export function normalize(raw) {
   for (const d of DEFAULTS.sections) if (!seen.has(d.id)) list.push(clone(d));
   out.sections = list;
 
-  const c = out.theme.colors;
-  for (const k of COLOR_KEYS) if (!HEX.test(String(c[k] || ''))) c[k] = DEFAULTS.theme.colors[k];
-  const f = out.theme.fonts;
-  for (const k of ['display', 'body', 'mono']) if (!FONT_NAME.test(String(f[k] || ''))) f[k] = DEFAULTS.theme.fonts[k];
-  const e = out.theme.effects;
-  for (const k of ['glitch', 'glow', 'spin', 'parallax']) e[k] = clampNum(e[k], 0, 100, DEFAULTS.theme.effects[k]);
+  sanitizeTheme(out.theme);
+  const T = out.themes;
+  T.auto = T.auto !== false;
+  T.list = (Array.isArray(T.list) ? T.list : []).filter((th) => isObj(th) && typeof th.id === 'string' && th.id).slice(0, 24).map((th) => ({
+    id: String(th.id).slice(0, 40),
+    name: String(th.name || 'Tema').slice(0, 60),
+    from: MD.test(th.from || '') ? th.from : '',
+    to: MD.test(th.to || '') ? th.to : '',
+    theme: sanitizeTheme(merge(clone(out.theme), isObj(th.theme) ? th.theme : {})),
+    banner: isObj(th.banner) ? merge(clone(DEFAULTS.banner), th.banner) : null,
+  }));
   out.audio.volume = clampNum(out.audio.volume, 0, 100, 70);
   if (!['auto', 'tr', 'en'].includes(out.site.defaultLang)) out.site.defaultLang = 'auto';
   const lg = out.media.logo;
@@ -370,6 +430,8 @@ export function themeCSS(cfg) {
     '--logo:' + c.logo,
     '--glow:' + rgba(c.glow, 0.5),
     '--glow-base:' + (0.02 + 0.06 * (e.glow / 50)).toFixed(3),
+    '--tl-light:' + c.timeline,
+    '--stone-filter:hue-rotate(' + cfg.theme.stone.hue + 'deg) saturate(' + (cfg.theme.stone.saturation / 100) + ') brightness(' + (cfg.theme.stone.brightness / 100) + ')',
     '--logo-src:url("' + logoUrl + '")',
     '--logo-ar:' + logo.width + ' / ' + logo.height,
     '--f-display:' + q(f.display) + ', ' + FALLBACK_STACK.display,
@@ -530,7 +592,7 @@ export function renderUI(cfg, lang) {
   html += '</div></div><div class="spacer"></div>';
 
   html += '<div class="bottom"><div class="now" aria-live="polite"><span class="k" id="nowK">' + esc(S('soundOff')) + '</span><span class="v" id="nowV">' + esc(L(cfg.audio.title)) + '</span></div>' +
-    '<span class="hint">' + esc(S('dragHint')) + '</span>' +
+    '<span class="hint">' + esc(S('scrollHint')) + ' · ' + esc(S('dragHint')) + '</span>' +
     '<button type="button" class="sound" id="soundBtn" aria-pressed="false" title="' + esc(S('soundOn')) + '"><span class="sr-only">' + esc(S('soundOn')) + '</span>' +
     '<svg viewBox="0 0 56 20" aria-hidden="true"><g class="amp"><path class="w" d="M0 10 Q 3.75 2 7.5 10 T 15 10 T 22.5 10 T 30 10 T 37.5 10 T 45 10 T 52.5 10 T 60 10 T 67.5 10 T 75 10 T 82.5 10 T 90 10"/></g></svg></button></div>';
   html += '</div>';
@@ -624,7 +686,7 @@ export function renderPage(cfg, lang) {
     '<div class="stage" id="stage"><div class="stone" id="stone" role="img" aria-label="' + esc(L(cfg.strings.stoneLabel)) + '">' +
     '<canvas id="stoneGL" aria-hidden="true"></canvas>' +
     '<video id="amberVideo" muted loop playsinline webkit-playsinline preload="none" disablepictureinpicture disableremoteplayback aria-hidden="true" hidden></video>' +
-    '<img class="poster" id="amberPoster" src="' + esc(poster) + '" alt="" width="720" height="900" fetchpriority="high">' +
+    '<img class="poster" id="amberPoster" src="' + esc(poster) + '" alt="" width="720" height="900" fetchpriority="high" draggable="false">' +
     '<div class="glow" id="amberGlow" aria-hidden="true"></div></div></div>\n' +
     '<div class="mark" id="mark" aria-hidden="true"><span class="logo"></span><canvas id="markFx"></canvas></div>\n' +
     '<div id="ui">' + renderUI(cfg, lang) + '</div>\n' +

@@ -2,7 +2,7 @@
 // Everything editable lives in content/site.json. The panel loads it from GitHub, edits a
 // draft with a live preview, and publishes the draft (plus any new files) as one commit;
 // Cloudflare rebuilds the site from that commit within about a minute.
-import { normalize, clone, FONT_CATALOG, PRESETS, COLOR_KEYS, DEFAULTS, youtubeId, t } from '/js/render.js';
+import { normalize, clone, FONT_CATALOG, PRESETS, COLOR_KEYS, DEFAULTS, STONE_PRESETS, youtubeId, t, themeForDate } from '/js/render.js';
 
 /* ======================= small helpers ======================= */
 
@@ -470,8 +470,10 @@ const COLOR_LABELS = {
   bannerText: ['Duyuru bandı yazısı', ''],
   logo: ['Logo rengi', 'Logo tek renk gösterilir'],
   glow: ['Taşın ışıltısı', 'Kehribarın etrafındaki parlama'],
+  timeline: ['Zaman çizelgesindeki ışık', 'Üstteki çizgide bölümler arasında ilerleyen ışık'],
 };
 const PRESET_NAMES = { amber: 'Kehribar', bone: 'Kemik', blood: 'Kan', ash: 'Kül', toxic: 'Zehir' };
+const STONE_NAMES = { natural: 'Doğal', honey: 'Bal', cherry: 'Kiraz', cognac: 'Konyak', lemon: 'Limon', green: 'Yeşil kehribar' };
 const STRING_LABELS = {
   soundOff: 'Alt köşe: ses kapalıyken', nowPlaying: 'Alt köşe: ses açıkken', soundOn: 'Ses düğmesi: aç', soundMute: 'Ses düğmesi: kapat',
   dragHint: 'Alttaki ipucu (bilgisayar)', scrollHint: 'Kaydır ipucu (telefon)', copy: 'Kopyala düğmesi', copied: 'Kopyalandı mesajı', selected: 'Seçildi mesajı', email: 'E-posta etiketi',
@@ -513,11 +515,31 @@ function presetsBox() {
   }));
 }
 
+const stoneFilter = (st) => 'hue-rotate(' + st.hue + 'deg) saturate(' + st.saturation / 100 + ') brightness(' + st.brightness / 100 + ')';
+function stoneBox() {
+  const st = get('theme.stone');
+  const sample = (v) => h('i', { class: 'amber-sw', style: 'filter:' + stoneFilter(v), 'aria-hidden': 'true' });
+  const pick = h('div', { class: 'presets' }, Object.keys(STONE_PRESETS).map((k) => h('button', {
+    type: 'button', class: 'preset', 'aria-pressed': st.preset === k ? 'true' : 'false',
+    onclick: () => { S.draft.theme.stone = { preset: k, ...STONE_PRESETS[k] }; changed({ rerender: true }); },
+  }, sample(STONE_PRESETS[k]), h('span', { text: STONE_NAMES[k] || k }))));
+  const custom = (path, label, opts) => {
+    const el = fRange(path, label, opts);
+    el.querySelector('input').addEventListener('input', () => { S.draft.theme.stone.preset = 'custom'; });
+    return el;
+  };
+  return [pick,
+    custom('theme.stone.hue', 'Renk tonu', { min: -60, max: 60, fmt: (v) => (v === 0 ? 'doğal' : v < 0 ? 'kırmızıya ' + -v : 'sarıya ' + v) }),
+    custom('theme.stone.saturation', 'Renk canlılığı', { min: 40, max: 160, fmt: (v) => '%' + v }),
+    custom('theme.stone.brightness', 'Parlaklık', { min: 70, max: 130, fmt: (v) => '%' + v })];
+}
+
 function tabDesign() {
   return [
     group('Hazır renk temaları', 'Tek tıkla bütün renkleri değiştirir. Sonra tek tek renkleri de değiştirebilirsin.', presetsBox()),
     group('Renkler', 'Kutucuğa tıklayıp renk seç ya da renk kodunu yaz (örneğin #e9a14b).',
       h('div', { class: 'colors' }, COLOR_KEYS.map((k) => fColor('theme.colors.' + k, COLOR_LABELS[k][0], COLOR_LABELS[k][1])))),
+    group('Taşın rengi', 'Gerçek kehribar türlerinden biri seç ya da kaydırıcılarla ayarla. Taş her durumda doğal görünecek şekilde sınırlandı.', stoneBox()),
     group('Yazı tipleri', 'Google Fonts’tan gelir. Listedekilerin hepsi Türkçe karakterleri destekliyor.',
       fFont('display', 'Başlıklar, menü ve düğmeler'), fFont('body', 'Metinler'), fFont('mono', 'Küçük etiketler ve tarihler')),
     h('div', { class: 'row' }, h('button', {
@@ -703,7 +725,7 @@ function tabGallery() {
     group('Instagram', 'Son paylaşımların sitenin kendi tasarımında görünür.',
       fToggle(ig + '.enabled', 'Instagram bölümünü göster', null, { rerender: true }),
       fText(ig + '.profile', 'Instagram profil linkin', { type: 'url', placeholder: 'https://www.instagram.com/kullaniciadin' }),
-      fText(ig + '.feedUrl', 'Otomatik akış adresi', { type: 'url', hint: 'Bunu birlikte bağlayacağız. Bağlanınca son paylaşımların burada otomatik görünür.' }),
+      fText(ig + '.feedUrl', 'Otomatik akış adresi', { type: 'url', placeholder: 'https://feeds.behold.so/…', hint: 'behold.so’da oluşturduğun JSON akışın adresi. Son paylaşımların burada, sitenin tasarımında görünür ve günde bir yenilenir.' }),
       fRange(ig + '.count', 'Kaç paylaşım görünsün', { min: 3, max: 12, step: 3 }),
       fBi(ig + '.label', 'Takip düğmesi yazısı')),
   ];
@@ -799,8 +821,67 @@ async function loadVersion(sha, date) {
   } catch (e) { toast(errorText(e), { error: true }); }
 }
 
+const toDM = (md) => (md ? md.slice(3) + '.' + md.slice(0, 2) : '');
+function fromDM(v) {
+  const m = String(v || '').trim().match(/^(\d{1,2})[./-](\d{1,2})$/);
+  if (!m) return null;
+  const d = Number(m[1]), mo = Number(m[2]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+
+function tabThemes() {
+  const T = S.draft.themes;
+  const live = themeForDate(S.draft);
+  const save = async () => {
+    const name = await dialog({ title: 'Yeni tema', body: 'Şu anki renkler, yazı tipleri, efektler ve taşın rengi bu temaya kaydedilir.', input: { label: 'Temanın adı', placeholder: 'Örneğin: Yılbaşı' }, ok: 'Kaydet' });
+    if (name === false) return;
+    T.list.push({ id: 't' + Date.now().toString(36), name: name || 'Yeni tema', from: '', to: '', theme: clone(S.draft.theme), banner: null });
+    changed({ rerender: true });
+    toast('Tema kaydedildi. Yayınla’ya basınca saklanır.');
+  };
+  const dateField = (th, key, label) => {
+    const inp = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'GG.AA', value: toDM(th[key]), 'aria-label': label, style: 'max-width:110px' });
+    inp.addEventListener('change', () => {
+      if (!inp.value.trim()) { th[key] = ''; changed(); return; }
+      const md = fromDM(inp.value);
+      if (!md) { toast('Tarihi gün.ay olarak yaz, örneğin 15.12', { error: true }); return; }
+      th[key] = md; changed({ rerender: true });
+    });
+    return h('label', { class: 'f', style: 'margin:0' }, h('span', { class: 'f-l', text: label }), inp);
+  };
+  const card = (th, i) => h('div', { class: 'card' },
+    h('div', { class: 'card-h' },
+      h('b', { text: th.name + (live && live.id === th.id ? ' · bugün açık' : '') }),
+      h('div', { class: 'tools' },
+        h('button', { type: 'button', class: 'icon-btn danger', title: 'Sil', 'aria-label': 'Temayı sil', onclick: async () => {
+          if (!(await dialog({ title: 'Tema silinsin mi?', body: '“' + th.name + '” silinecek.', ok: 'Sil', danger: true }))) return;
+          T.list.splice(i, 1); if (S.previewTheme === th.id) S.previewTheme = null; changed({ rerender: true });
+        } }, icon('trash')))),
+    h('div', { class: 'card-b' },
+      fText('themes.list.' + i + '.name', 'Adı'),
+      h('div', { class: 'row', style: 'gap:12px;margin-bottom:12px' }, dateField(th, 'from', 'Başlangıç'), dateField(th, 'to', 'Bitiş')),
+      h('p', { class: 'f-h', style: 'margin:0 0 12px', text: th.from && th.to ? toDM(th.from) + ' ile ' + toDM(th.to) + ' arasında kendiliğinden açılır.' : 'Tarih girmezsen kendiliğinden açılmaz; istediğinde ana görünüm yapabilirsin.' }),
+      h('div', { class: 'row' },
+        h('button', { type: 'button', class: 'btn small', 'aria-pressed': S.previewTheme === th.id ? 'true' : 'false', onclick: () => { S.previewTheme = S.previewTheme === th.id ? null : th.id; postPreview(); renderTab(); } }, icon('eye'), S.previewTheme === th.id ? 'Önizlemeyi kapat' : 'Önizle'),
+        h('button', { type: 'button', class: 'btn small', onclick: () => { th.theme = clone(S.draft.theme); changed({ rerender: true }); toast('Tema, şu anki görünümle güncellendi.'); } }, 'Şu anki görünümü buna kaydet'),
+        h('button', { type: 'button', class: 'btn small', onclick: () => { S.draft.theme = clone(th.theme); changed({ rerender: true }); toast('“' + th.name + '” ana görünüm yapıldı.'); } }, 'Ana görünüm yap'),
+        th.banner
+          ? h('button', { type: 'button', class: 'btn small', onclick: () => { th.banner = null; changed({ rerender: true }); } }, 'Duyuru bandını temadan çıkar')
+          : h('button', { type: 'button', class: 'btn small', onclick: () => { th.banner = clone(S.draft.banner); changed({ rerender: true }); toast('Şu anki duyuru bandı bu temaya eklendi.'); } }, 'Şu anki duyuru bandını ekle'))));
+  return [
+    h('p', { class: 'note', text: 'Tema; renkler, yazı tipleri, efektler ve taşın renginden oluşan kayıtlı bir görünüm. Bir temaya tarih verirsen o günler arasında site kendiliğinden o temaya geçer, sonra eski haline döner. Örneğin yılbaşı için 15.12 – 02.01.' }),
+    group('Otomatik geçiş', null, fToggle('themes.auto', 'Tarihi gelince temayı kendiliğinden aç', 'Kapalıysa temalar sadece sen “Ana görünüm yap” dediğinde kullanılır.')),
+    group('Kayıtlı temalar', T.list.length ? null : 'Henüz kayıtlı tema yok. Önce istediğin renkleri ve taş rengini ayarla, sonra buradan tema olarak kaydet.',
+      h('div', { class: 'list' }, T.list.map(card)),
+      h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { type: 'button', class: 'btn small', onclick: save }, icon('plus'), 'Şu anki görünümü yeni tema olarak kaydet'))),
+    h('p', { class: 'f-h', text: 'Kar, ışıklar gibi temaya özel süslemeleri Kasım’da yılbaşı temasıyla birlikte ekleriz.' }),
+  ];
+}
+
 const TABS = [
-  { id: 'design', group: 'Görünüm', label: 'Renk ve yazı tipi', focus: 'intro', render: tabDesign, lead: 'Sitenin renkleri ve yazı tipleri. Değiştirdikçe sağda önizlemede görürsün.' },
+  { id: 'design', group: 'Görünüm', label: 'Renk ve yazı tipi', focus: 'intro', render: tabDesign, lead: 'Sitenin renkleri, yazı tipleri ve taşın rengi. Değiştirdikçe sağda önizlemede görürsün.' },
+  { id: 'themes', group: 'Görünüm', label: 'Temalar', focus: 'intro', render: tabThemes },
   { id: 'effects', group: 'Görünüm', label: 'Efektler ve ses', focus: 'intro', render: tabEffects },
   { id: 'media', group: 'Görünüm', label: 'Logo', focus: 'intro', render: tabMedia },
   { id: 'gate', group: 'İçerik', label: 'Giriş ve üst düğme', focus: 'gate', render: tabGate },
@@ -831,6 +912,7 @@ function renderTab() {
 
 function openTab(id) {
   S.tab = id;
+  if (id !== 'themes') S.previewTheme = null;
   renderTab();
   $('#editor').scrollTop = 0;
   const tab = TABS.find((x) => x.id === id);
@@ -911,7 +993,7 @@ function postPreview(focus) {
   let fc = focus;
   if (fc === undefined) fc = tab && tab.focus === 'gate' ? 'gate' : undefined;
   if (fc === null) fc = undefined;
-  f.contentWindow.postMessage({ type: 'ay:config', cfg: previewCfg(), lang: S.pvLang, focus: fc }, location.origin);
+  f.contentWindow.postMessage({ type: 'ay:config', cfg: previewCfg(), lang: S.pvLang, focus: fc, previewTheme: S.tab === 'themes' ? S.previewTheme : null }, location.origin);
 }
 
 function fitPreview() {

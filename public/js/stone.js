@@ -10,7 +10,7 @@ in vec2 aUV;
 uniform sampler2D uDepth;
 uniform vec4 uCell;
 uniform mat3 uRot;
-uniform float uDist, uFocal, uAspect, uNear, uRange;
+uniform float uDist, uFocal, uAspect, uNear, uRange, uDistT, uZoom;
 out vec2 vUV;
 out float vMask;
 void main(){
@@ -19,9 +19,11 @@ void main(){
   vec2 s = vec2((aUV.x - 0.5) * uAspect, 0.5 - aUV.y);
   vec3 P = vec3(0.0, 0.0, uDist) + normalize(vec3(s * uFocal, -1.0)) * t;
   vec3 Q = uRot * P;
-  float z = uDist - Q.z;
-  vec2 p = Q.xy / (uFocal * z);
-  gl_Position = vec4(p.x / (0.5 * uAspect), p.y / 0.5, clamp((z - uNear) / uRange, 0.0, 1.0) * 2.0 - 1.0, 1.0);
+  // seen from a camera at distance uDistT: moving it closer enlarges the stone with real perspective
+  float z = uDistT - Q.z;
+  vec2 p = Q.xy / (uFocal * z) * uZoom;
+  float nearT = uDistT - (uDist - uNear);
+  gl_Position = vec4(p.x / (0.5 * uAspect), p.y / 0.5, clamp((z - nearT) / uRange, 0.0, 1.0) * 2.0 - 1.0, 1.0);
   vUV = aUV;
   vMask = d.g;
 }`;
@@ -42,19 +44,40 @@ void main(){ vUV = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
 const FS_MIX = `#version 300 es
 precision mediump float;
 uniform sampler2D uA, uB;
-uniform float uMix, uLift;
+uniform float uMix, uLift, uBright;
+uniform mat3 uGrade;
 in vec2 vUV;
 out vec4 o;
 void main(){
   vec4 c = mix(texture(uA, vUV), texture(uB, vUV), uMix);
   vec2 q = (vUV - 0.5) * 2.0;
   float r = length(q);
-  float t = clamp((r - 0.86) / 0.14, 0.0, 1.0);
+  float t = clamp((r - 0.93) / 0.07, 0.0, 1.0);
   float fade = 1.0 - t * t * (3.0 - 2.0 * t);
-  vec3 col = c.rgb * fade;
+  // colour of the amber: hue and saturation turn around the grey axis, so it stays natural
+  vec3 col = clamp(uGrade * c.rgb, 0.0, 1.0) * uBright * fade;
   col += col * uLift * c.a;
   o = vec4(col, 1.0);
 }`;
+
+// the same maths as CSS hue-rotate() and saturate(), as a column-major matrix for GLSL
+export function colorMatrix(hueDeg, sat) {
+  const a = (hueDeg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+  const H = [
+    0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928,
+    0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283,
+    0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072,
+  ];
+  const S = [
+    0.213 + 0.787 * sat, 0.715 - 0.715 * sat, 0.072 - 0.072 * sat,
+    0.213 - 0.213 * sat, 0.715 + 0.285 * sat, 0.072 - 0.072 * sat,
+    0.213 - 0.213 * sat, 0.715 - 0.715 * sat, 0.072 + 0.928 * sat,
+  ];
+  // row-major product S * H, then transposed to column-major
+  const R = new Array(9);
+  for (let r = 0; r < 3; r++) for (let k = 0; k < 3; k++) R[r * 3 + k] = S[r * 3] * H[k] + S[r * 3 + 1] * H[3 + k] + S[r * 3 + 2] * H[6 + k];
+  return [R[0], R[3], R[6], R[1], R[4], R[7], R[2], R[5], R[8]];
+}
 
 function rotY(a) { const c = Math.cos(a), s = Math.sin(a); return [c, 0, -s, 0, 1, 0, s, 0, c]; }
 function rotX(a) { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, c, s, 0, -s, c]; }
@@ -74,7 +97,7 @@ export function createStone(canvas, opts) {
     count: 120, frame: (k) => '/assets/amber/c' + String(k).padStart(3, '0') + '.webp',
     depth: '/assets/amber/depth.webp', grid: [12, 10], cell: [160, 200],
     dist: 4.6, focal: 0.6, aspect: 0.8, near: 3.4, range: 2.4,
-    maxTextures: 10, onFirstFrame: null,
+    maxTextures: 10, onFirstFrame: null, zoom: 1,
   }, opts || {});
 
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, premultipliedAlpha: false, powerPreference: 'high-performance' });
@@ -103,8 +126,8 @@ export function createStone(canvas, opts) {
     return null;
   }
   const U = (p, names) => Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(p, n)]));
-  const uw = U(warp, ['uDepth', 'uCell', 'uRot', 'uDist', 'uFocal', 'uAspect', 'uNear', 'uRange', 'uColor']);
-  const um = U(mixP, ['uA', 'uB', 'uMix', 'uLift']);
+  const uw = U(warp, ['uDepth', 'uCell', 'uRot', 'uDist', 'uFocal', 'uAspect', 'uNear', 'uRange', 'uColor', 'uDistT', 'uZoom']);
+  const um = U(mixP, ['uA', 'uB', 'uMix', 'uLift', 'uGrade', 'uBright']);
 
   // grid mesh over the frame
   const GW = 80, GH = 100;
@@ -266,7 +289,7 @@ export function createStone(canvas, opts) {
     return [(col * cw + 0.5) / atlasW, (row * ch + 0.5) / atlasH, (cw - 1) / atlasW, (ch - 1) / atlasH];
   }
 
-  function drawView(target, k, yaw, pitch, roll) {
+  function drawView(target, k, yaw, pitch, roll, distT) {
     const e = textures.get(k);
     e.used = performance.now();
     // a view is only ever turned a few degrees away from where it was rendered; if the right
@@ -293,12 +316,15 @@ export function createStone(canvas, opts) {
     gl.uniform1f(uw.uAspect, o.aspect);
     gl.uniform1f(uw.uNear, o.near);
     gl.uniform1f(uw.uRange, o.range);
+    gl.uniform1f(uw.uDistT, distT);
+    gl.uniform1f(uw.uZoom, o.zoom);
     gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
     gl.disable(gl.DEPTH_TEST);
   }
 
-  let last = { yaw: NaN, pitch: NaN, roll: NaN, lift: NaN };
-  function render(yaw, pitch, roll, lift = 0, force = false) {
+  let last = { yaw: NaN, pitch: NaN, roll: NaN, lift: NaN, dist: NaN };
+  let grade = [1, 0, 0, 0, 1, 0, 0, 0, 1], bright = 1;
+  function render(yaw, pitch, roll, lift = 0, force = false, dist = o.dist) {
     if (failed || !depthTex) return false;
     resize();
     const pos = (((yaw % TAU) + TAU) % TAU) / TAU * o.count;
@@ -311,13 +337,13 @@ export function createStone(canvas, opts) {
     for (let s = 1; s <= ahead; s++) upload((k0 + (dir < 0 ? -s : s + 1) + o.count * 4) % o.count);
     const a = nearestReady(k0), b = nearestReady(k1);
     if (a < 0) return false;
-    const changed = dirty || Math.abs(yaw - last.yaw) > 1e-5 || Math.abs(pitch - last.pitch) > 1e-5 || Math.abs(roll - last.roll) > 1e-5 || Math.abs(lift - last.lift) > 1e-3;
+    const changed = dirty || Math.abs(yaw - last.yaw) > 1e-5 || Math.abs(pitch - last.pitch) > 1e-5 || Math.abs(roll - last.roll) > 1e-5 || Math.abs(lift - last.lift) > 1e-3 || Math.abs(dist - last.dist) > 1e-4;
     if (!changed && !force) return true;
     dirty = false;
-    last = { yaw, pitch, roll, lift };
-    drawView(targets[0], a, yaw, pitch, roll);
+    last = { yaw, pitch, roll, lift, dist };
+    drawView(targets[0], a, yaw, pitch, roll, dist);
     const blend = b >= 0 && b !== a;
-    if (blend) drawView(targets[1], b, yaw, pitch, roll);
+    if (blend) drawView(targets[1], b, yaw, pitch, roll, dist);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.useProgram(mixP);
@@ -334,6 +360,8 @@ export function createStone(canvas, opts) {
     }
     gl.uniform1f(um.uMix, mixAB);
     gl.uniform1f(um.uLift, lift);
+    gl.uniformMatrix3fv(um.uGrade, false, grade);
+    gl.uniform1f(um.uBright, bright);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
     if (!firstDrawn) { firstDrawn = true; if (o.onFirstFrame) o.onFirstFrame(); }
@@ -355,6 +383,11 @@ export function createStone(canvas, opts) {
     get drawn() { return firstDrawn; },
     get quality() { return quality; },
     // lower the drawing resolution on slow devices (1 = full)
+    // hue in degrees, saturation and brightness as factors (1 = as rendered)
+    setGrade(hue, sat, br) {
+      const g = colorMatrix(hue, sat);
+      if (g.some((v, i) => Math.abs(v - grade[i]) > 1e-6) || Math.abs(br - bright) > 1e-6) { grade = g; bright = br; dirty = true; }
+    },
     setQuality(q) { q = Math.min(1, Math.max(0.4, q)); if (q !== quality) { quality = q; dirty = true; } },
     needsDraw() { return dirty; },
   };

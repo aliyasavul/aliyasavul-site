@@ -1,7 +1,7 @@
 // Runtime for the public site. The page arrives pre-rendered (scripts/build.mjs); this
 // module adds the camera, the glitch, sound, overlays and the TR/EN switch, and re-renders
 // from the same config when the language changes or the admin preview sends a draft.
-import { normalize, renderUI, renderGate, themeCSS, fontsHref, enabledSections, t, safeUrl } from './render.js';
+import { normalize, renderUI, renderGate, themeCSS, fontsHref, enabledSections, t, safeUrl, themeForDate, withTheme } from './render.js';
 import { createStone } from './stone.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -14,6 +14,8 @@ const store = {
 };
 
 let cfg = normalize(JSON.parse($('#site-data').textContent));
+// a saved seasonal theme (for example New Year) takes over between its dates
+if (!PREVIEW) cfg = withTheme(cfg, themeForDate(cfg));
 let lang = initialLang();
 let current = 'intro';
 let started = false;
@@ -90,21 +92,27 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const ease = (t) => t * t * (3 - 2 * t);
 
 const narrowMQ = window.matchMedia('(max-width: 760px), (max-aspect-ratio: 1/1)');
-let scrollMode = narrowMQ.matches;
+// every screen scrolls through the sections; narrow screens only lay them out differently
+let scrollMode = true;
+const isNarrow = () => narrowMQ.matches;
 let scrollP = 0;
 let slides = [];
 
-// where the camera looks from in each section: how far it orbits the stone, its height and tilt
-const ORBIT = 0.95;
-const PITCH = [0, 0.13, -0.1, 0.16, -0.08, 0.12, -0.12];
-const ROLL = [0, -0.035, 0.04, -0.03, 0.035, -0.04, 0.03];
-const AUTO = TAU / 26;
+// Each section has its own camera: an angle around the stone, a height, a tilt and a distance.
+// The camera gets a little closer with every step back in time.
+const BASE_DIST = 4.6;   // the distance the views were rendered from
+const NEAR_DIST = 3.3;   // the closest the camera comes, in the last section
+const FILL = 0.78;       // the stone is drawn at this share of its box, leaving room for close-ups
+const YAW_STEP = 1.3;
+const PITCH = [0, 0.16, -0.13, 0.21, -0.17, 0.12, -0.1];
+const ROLL = [0, -0.04, 0.05, -0.035, 0.045, -0.05, 0.03];
 
 const m = {
-  auto: 0, drag: 0, dragVel: 0,
+  drag: 0, dragVel: 0,
   orbit: 0, orbitVel: 0,
   pitch: 0, pitchVel: 0, tilt: 0,
   roll: 0, rollVel: 0,
+  dist: BASE_DIST, distVel: 0,
   cam: { x: 0, y: 0, s: 1 },
 };
 const pointer = { x: 0, y: 0 }, pointerS = { x: 0, y: 0 };
@@ -119,23 +127,56 @@ function spring(key, target, w, dt) {
 
 function indexOf(id) { return Math.max(0, enabledSections(cfg).findIndex((s) => s.id === id)); }
 
-// screen position and size of the stone for section i
-function camFor(i) {
+function poseOf(i, n) {
+  const spin = fx().spin / 50;
+  const depth = n > 1 ? i / (n - 1) : 0;
+  return {
+    yaw: i * YAW_STEP * spin,
+    pitch: PITCH[i % PITCH.length] * (0.4 + 0.6 * Math.min(1.5, spin)),
+    roll: ROLL[i % ROLL.length] * Math.min(1.5, spin),
+    dist: BASE_DIST - (BASE_DIST - NEAR_DIST) * depth,
+  };
+}
+
+// where the stone sits on screen for section i; `mag` is how much the camera distance enlarges it
+function camFor(i, mag) {
   const n = enabledSections(cfg).length;
   const W = window.innerWidth, H = window.innerHeight;
-  if (scrollMode) {
+  const visH = stone.offsetHeight * 0.62 * mag;   // height of the stone itself, not its box
+  if (isNarrow()) {
     if (i === 0) return { x: 0, y: -H * 0.05, s: 1 };
     const top = ($('.top', ui)?.getBoundingClientRect().bottom || 120) + 6;
     const bottom = H * 0.46 - 6;
-    const s = clamp((bottom - top) / (stone.offsetHeight * 0.8), 0.3, 0.9);
+    const s = clamp((bottom - top) / Math.max(1, visH), 0.3, 1);
     return { x: 0, y: (top + bottom) / 2 - H / 2, s };
   }
   if (i === 0) return { x: 0, y: -H * 0.04, s: 1 };
-  const depth = n > 2 ? (i - 1) / (n - 2) : 0;
-  const scale = 1.06 + 0.16 * depth;
   const side = i % 2 === 1 ? 1 : -1;
-  const half = stone.offsetWidth * 0.26 * scale;
-  return { x: side * Math.min(W * 0.25, W / 2 - half - 24), y: 0, s: scale };
+  const half = stone.offsetWidth * 0.26 * FILL * mag;
+  return { x: side * Math.min(W * 0.25, W / 2 - half - 24), y: 0, s: 1 };
+}
+
+// phones: tilting the phone turns the stone, like moving the mouse does on a computer
+const tiltCtl = { on: false, base: null };
+function onOrientation(e) {
+  if (e.beta == null || e.gamma == null) return;
+  const portrait = !window.screen.orientation || /portrait/.test(window.screen.orientation.type || 'portrait');
+  const b = portrait ? e.beta : e.gamma, g = portrait ? e.gamma : -e.beta;
+  if (!tiltCtl.base) tiltCtl.base = { b, g };
+  // drift the resting angle slowly so holding the phone differently does not leave the stone turned
+  tiltCtl.base.b += (b - tiltCtl.base.b) * 0.004;
+  tiltCtl.base.g += (g - tiltCtl.base.g) * 0.004;
+  pointer.x = clamp((g - tiltCtl.base.g) / 28, -0.6, 0.6);
+  pointer.y = clamp((b - tiltCtl.base.b) / 28, -0.6, 0.6);
+  wake();
+}
+function startTilt() {
+  if (tiltCtl.on || PREVIEW || !window.matchMedia('(pointer: coarse)').matches || typeof DeviceOrientationEvent === 'undefined') return;
+  const listen = () => { tiltCtl.on = true; window.addEventListener('deviceorientation', onOrientation); };
+  // iPhone asks once for permission; this runs inside the tap on the start button
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then((r) => { if (r === 'granted') listen(); }).catch(() => {});
+  } else listen();
 }
 
 let stone3d = null, usingVideo = false;
@@ -163,12 +204,18 @@ try {
   if (typeof createImageBitmap === 'function') {
     stone3d = createStone(glCanvas, {
       maxTextures: (navigator.deviceMemory || 4) >= 4 ? 14 : 9,
+      zoom: FILL,
       onFirstFrame() { glCanvas.classList.add('on'); poster.classList.add('hide'); },
       onFail() { useVideo(); },
     });
   }
 } catch (e) { stone3d = null; }
 if (!stone3d) useVideo();
+function applyStoneColor() {
+  const st = cfg.theme.stone;
+  if (stone3d) stone3d.setGrade(st.hue, st.saturation / 100, st.brightness / 100);
+}
+applyStoneColor();
 // frames arrived but nothing could be drawn (a graphics problem): fall back to the video
 setTimeout(() => { if (stone3d && !stone3d.drawn && stone3d.loaded > 3) useVideo(); }, 20000);
 
@@ -191,49 +238,51 @@ function tick(now) {
   raf = 0;
   if (lastNow) trackFrame(now - lastNow);
   let dt = Math.min(0.1, (now - (lastNow || now)) / 1000); lastNow = now;
-  const list = enabledSections(cfg);
-  const n = list.length;
+  const n = enabledSections(cfg).length;
   const p = scrollMode ? clamp(scrollP, 0, n - 1) : indexOf(current);
   const i0 = Math.floor(p), i1 = Math.min(n - 1, i0 + 1), f = ease(p - i0);
-  const c0 = camFor(i0), c1 = camFor(i1);
+  const a = poseOf(i0, n), b = poseOf(i1, n);
+  const yawT = lerp(a.yaw, b.yaw, f), pitchT = lerp(a.pitch, b.pitch, f), rollT = lerp(a.roll, b.roll, f), distT = lerp(a.dist, b.dist, f);
+  const c0 = camFor(i0, BASE_DIST / a.dist), c1 = camFor(i1, BASE_DIST / b.dist);
   const ct = { x: lerp(c0.x, c1.x, f), y: lerp(c0.y, c1.y, f), s: lerp(c0.s, c1.s, f) };
-  const spin = fx().spin / 50;
-  const orbitT = p * ORBIT * spin;
-  const pitchT = lerp(PITCH[i0 % PITCH.length], PITCH[i1 % PITCH.length], f) * (0.4 + 0.6 * spin);
   // substeps keep the springs stable on slow frames
   const steps = Math.max(1, Math.ceil(dt / (1 / 60)));
   const h = dt / steps;
   for (let k = 0; k < steps; k++) {
-    spring('orbit', orbitT, scrollMode ? 7 : 2.4, h);
-    spring('pitch', pitchT + m.tilt, drag ? 14 : 4, h);
-    const bank = clamp(m.orbitVel * 0.045, -0.07, 0.07);
-    spring('roll', lerp(ROLL[i0 % ROLL.length], ROLL[i1 % ROLL.length], f) * spin + bank, 4, h);
+    spring('orbit', yawT, isNarrow() ? 7 : 5, h);
+    spring('pitch', pitchT + m.tilt, drag ? 14 : 3.6, h);
+    const bank = clamp(m.orbitVel * 0.05, -0.08, 0.08);
+    spring('roll', rollT + bank, 3.6, h);
+    spring('dist', distT, isNarrow() ? 6 : 4.5, h);
   }
   if (!drag) {
     m.drag += m.dragVel * dt;
     m.dragVel *= Math.exp(-dt * 2.2);
     m.tilt *= Math.exp(-dt * 2.8);
   }
-  if (!reduce && started) m.auto += AUTO * dt;
-  const kc = reduce ? 1 : 1 - Math.exp(-dt * (scrollMode ? 6 : 2.2));
+  const kc = reduce ? 1 : 1 - Math.exp(-dt * (isNarrow() ? 6 : 4.5));
   m.cam.x += (ct.x - m.cam.x) * kc; m.cam.y += (ct.y - m.cam.y) * kc; m.cam.s += (ct.s - m.cam.s) * kc;
   const kp = 1 - Math.exp(-dt * 3.5);
   pointerS.x += (pointer.x - pointerS.x) * kp; pointerS.y += (pointer.y - pointerS.y) * kp;
   const par = reduce ? 0 : fx().parallax / 50;
+  // a slow breath instead of a constant spin, so each section keeps its own view of the stone
+  const tt = now / 1000;
+  const sway = reduce || !started ? 0 : Math.sin(tt * 0.31) * 0.07 + Math.sin(tt * 0.13 + 1.7) * 0.05;
+  const bob = reduce || !started ? 0 : Math.sin(tt * 0.27 + 0.6) * 0.022;
   // the camera dips as it swings round, which reads as a move through space
-  const swoop = -0.08 * clamp(Math.abs(m.orbitVel) / 1.4, 0, 1);
-  const yaw = m.auto + m.drag + m.orbit + pointerS.x * 0.16 * par;
-  const pitch = clamp(m.pitch + swoop - pointerS.y * 0.1 * par, -0.26, 0.26);
-  stone.style.transform = 'translate(-50%, -50%) translate3d(' + (m.cam.x + pointerS.x * 8 * par).toFixed(1) + 'px, ' + (m.cam.y + pointerS.y * 5 * par).toFixed(1) + 'px, 0) scale(' + m.cam.s.toFixed(4) + ')';
+  const swoop = -0.09 * clamp(Math.abs(m.orbitVel) / 1.4, 0, 1);
+  const yaw = m.drag + m.orbit + sway + pointerS.x * 0.55 * par;
+  const pitch = clamp(m.pitch + swoop + bob + pointerS.y * 0.2 * par, -0.28, 0.28);
+  stone.style.transform = 'translate(-50%, -50%) translate3d(' + (m.cam.x + pointerS.x * 10 * par).toFixed(1) + 'px, ' + (m.cam.y + pointerS.y * 6 * par).toFixed(1) + 'px, 0) scale(' + m.cam.s.toFixed(4) + ')';
   const lvl = audio.level();
   const g = fx().glow / 50;
   glow.style.opacity = (0.02 + 0.06 * g + lvl * 0.55 * g).toFixed(3);
-  // when nothing but the slow idle spin is happening, draw every other frame to spare the battery
-  const busy = drag || audio.on || Math.abs(m.orbitVel) + Math.abs(m.pitchVel) + Math.abs(m.rollVel) > 0.003 || Math.abs(m.dragVel) > 0.02 ||
+  // when nothing but the slow breath is happening, draw every other frame to spare the battery
+  const busy = drag || audio.on || Math.abs(m.orbitVel) + Math.abs(m.pitchVel) + Math.abs(m.rollVel) + Math.abs(m.distVel) > 0.003 || Math.abs(m.dragVel) > 0.02 ||
     Math.abs(ct.x - m.cam.x) + Math.abs(ct.y - m.cam.y) > 0.5 || Math.abs(ct.s - m.cam.s) > 0.002 || Math.abs(pointer.x - pointerS.x) + Math.abs(pointer.y - pointerS.y) > 0.002;
   skip = busy ? false : !skip;
-  if (stone3d && !skip) stone3d.render(yaw, pitch, m.roll, lvl * 0.5 * g);
-  // keep turning while the page is open; before the start screen is passed, only until the first frame is up
+  if (stone3d && !skip) stone3d.render(yaw, pitch, m.roll, lvl * 0.5 * g, false, m.dist);
+  // keep the stone alive while the page is open; before the start screen is passed, only until the first frame is up
   if (started || !stone3d || !stone3d.drawn) wake();
 }
 function wake() { if (!raf) raf = requestAnimationFrame(tick); }
@@ -297,6 +346,18 @@ function onScroll() {
     if (y < b) { const start = Math.max(a, b - H); p = k + clamp((y - start) / Math.max(1, b - start), 0, 1); break; }
   }
   scrollP = p;
+  // each section's text fades in as it rises into view and out as it leaves at the top
+  const boxes = [];
+  for (const el of ui.querySelectorAll('.panel')) {
+    const pin = el.firstElementChild;
+    if (!pin) continue;
+    const top = el.getBoundingClientRect().top + pin.offsetTop;
+    boxes.push([pin, top, top + pin.offsetHeight]);
+  }
+  for (const [pin, top, bottom] of boxes) {
+    const vis = Math.min(clamp((H - top) / (H * 0.35), 0, 1), clamp(bottom / (H * 0.3), 0, 1));
+    pin.style.setProperty('--vis', vis.toFixed(3));
+  }
   const id = slides[Math.round(p)].id;
   if (id !== current) {
     current = id;
@@ -310,38 +371,13 @@ function onScroll() {
 window.addEventListener('scroll', onScroll, { passive: true });
 
 function applyMode() {
-  scrollMode = narrowMQ.matches;
-  document.body.classList.toggle('scroll-mode', scrollMode);
-  if (scrollMode) {
-    ui.querySelectorAll('.panel').forEach((p) => { p.removeAttribute('inert'); p.setAttribute('aria-hidden', 'false'); p.classList.add('is-active'); });
-    requestAnimationFrame(measureSlides);
-  } else {
-    window.scrollTo(0, 0);
-    go(current, { silent: true });
-  }
+  scrollMode = true;
+  document.body.classList.add('scroll-mode');
+  ui.querySelectorAll('.panel').forEach((p) => { p.removeAttribute('inert'); p.setAttribute('aria-hidden', 'false'); p.classList.add('is-active'); });
+  requestAnimationFrame(measureSlides);
   wake();
 }
-narrowMQ.addEventListener ? narrowMQ.addEventListener('change', () => { const keep = current; applyMode(); if (scrollMode) requestAnimationFrame(() => go(keep, { instant: true })); }) : null;
-
-/* desktop: wheel and arrow keys move between sections */
-const wheel = { acc: 0, armed: true, last: 0, lock: 0 };
-function canScroll(el, dy) {
-  return dy > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0;
-}
-window.addEventListener('wheel', (e) => {
-  if (scrollMode || !started || !overlay.hidden) return;
-  const gate = $('#gate');
-  if (gate && !gate.classList.contains('gone')) return;
-  const panel = e.target.closest && e.target.closest('.panel');
-  if (panel && canScroll(panel, e.deltaY)) return;
-  const now = performance.now();
-  if (now - wheel.last > 220) { wheel.armed = true; wheel.acc = 0; }
-  wheel.last = now;
-  if (!wheel.armed || now < wheel.lock) return;
-  const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * window.innerHeight : e.deltaY;
-  wheel.acc += dy;
-  if (Math.abs(wheel.acc) > 60) { step(Math.sign(wheel.acc)); wheel.armed = false; wheel.acc = 0; wheel.lock = now + 650; }
-}, { passive: true });
+if (narrowMQ.addEventListener) narrowMQ.addEventListener('change', () => { const keep = current; requestAnimationFrame(() => { measureSlides(); go(keep, { instant: true }); }); });
 
 /* pointer: turn and tilt the stone by dragging; it keeps spinning when let go */
 window.addEventListener('pointermove', (e) => {
@@ -363,9 +399,11 @@ window.addEventListener('pointermove', (e) => {
     wake();
   }
 });
+stage.addEventListener('dragstart', (e) => e.preventDefault());
 stage.addEventListener('pointerdown', (e) => {
   if (!started || !stone3d) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (e.pointerType === 'mouse') e.preventDefault();
   drag = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp };
   m.dragVel = 0;
   stage.classList.add('dragging');
@@ -726,7 +764,11 @@ async function loadInstagram() {
     try {
       let posts = igCache.get(url);
       if (!posts) {
-        const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+        // Behold feeds go through the site, which keeps a copy for a few hours
+        const bh = url.match(/^https:\/\/feeds\.behold\.so\/([A-Za-z0-9_-]{6,64})\/?$/);
+        let res = null;
+        if (bh) { try { res = await fetch('/api/ig?feed=' + bh[1]); } catch (e) { res = null; } }
+        if (!res || !res.ok) res = await fetch(url, { mode: 'cors', credentials: 'omit' });
         if (!res.ok) throw new Error('feed ' + res.status);
         posts = parseFeed(await res.json());
         igCache.set(url, posts);
@@ -799,8 +841,6 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest && e.target.closest('input, textarea, select')) return;
   if (e.key === 'ArrowRight') step(1);
   else if (e.key === 'ArrowLeft') step(-1);
-  else if (!scrollMode && (e.key === 'ArrowDown' || e.key === 'PageDown')) { if (!(e.target.closest && e.target.closest('.panel') && canScroll(e.target.closest('.panel'), 1))) { e.preventDefault(); step(1); } }
-  else if (!scrollMode && (e.key === 'ArrowUp' || e.key === 'PageUp')) { if (!(e.target.closest && e.target.closest('.panel') && canScroll(e.target.closest('.panel'), -1))) { e.preventDefault(); step(-1); } }
   else if (e.key === 'Escape') go('intro');
 });
 
@@ -826,6 +866,7 @@ function enter(withSound) {
   if (withSound) setSound(true);
   started = true;
   startedAt = performance.now();
+  startTilt();
   stage.classList.add('lit');
   if (!stone3d && !reduce) playVideo();
   wake();
@@ -841,7 +882,8 @@ function showGate() {
 }
 
 if (!PREVIEW) document.body.classList.add('gated');
-if (lang !== document.documentElement.lang) renderAll();
+if (cfg.activeTheme) applyTheme();
+if (lang !== document.documentElement.lang || cfg.activeTheme) renderAll();
 else {
   const banner = $('.banner', ui);
   if (banner && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
@@ -856,8 +898,11 @@ if (PREVIEW) {
     const prevLogo = cfg.media.logo.src;
     const prevAudio = cfg.audio.src;
     cfg = normalize(e.data.cfg);
+    // the panel can preview a saved theme without switching to it
+    if (e.data.previewTheme) cfg = withTheme(cfg, cfg.themes.list.find((th) => th.id === e.data.previewTheme) || null);
     if (e.data.lang === 'tr' || e.data.lang === 'en') lang = e.data.lang;
     applyTheme();
+    applyStoneColor();
     if (cfg.media.logo.src !== prevLogo) logoFx && logoFx.load(safeUrl(cfg.media.logo.src, { allowBlob: true }));
     if (cfg.audio.src !== prevAudio) { audio.reset(); }
     const focus = e.data.focus;

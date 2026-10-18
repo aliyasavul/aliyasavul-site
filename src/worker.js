@@ -13,11 +13,11 @@ const enc = new TextEncoder();
 const dec = new TextDecoder();
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     try {
-      return await route(request, env, url);
+      return await route(request, env, url, ctx);
     } catch (err) {
       console.error('api error', err && err.stack ? err.stack : err);
       return json({ error: 'server_error' }, 500);
@@ -25,8 +25,9 @@ export default {
   },
 };
 
-async function route(request, env, url) {
+async function route(request, env, url, ctx) {
   const p = url.pathname, m = request.method;
+  if (p === '/api/ig' && m === 'GET') return instagram(env, url, ctx);
   if (p === '/api/auth/login' && m === 'GET') return login(env, url);
   if (p === '/api/auth/callback' && m === 'GET') return callback(request, env, url);
   if (p === '/api/auth/logout' && m === 'POST') return logout(request, env, url);
@@ -240,6 +241,29 @@ async function oembed(request, env, url) {
   if (!res.ok) return json({ error: 'not_found' }, 404);
   const j = await res.json().catch(() => ({}));
   return json({ title: String(j.title || ''), author: String(j.author_name || '') });
+}
+
+/* ---------------- Instagram feed (Behold), cached so visits do not use up the plan ---------------- */
+
+async function instagram(env, url, ctx) {
+  const id = url.searchParams.get('feed') || '';
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(id)) return json({ error: 'bad_feed' }, 400);
+  const key = new Request(url.origin + '/__cache/ig/' + id);
+  const cache = typeof caches !== 'undefined' ? caches.default : null;
+  if (cache) {
+    const hit = await cache.match(key);
+    if (hit) return hit;
+  }
+  const up = await fetch('https://feeds.behold.so/' + id, { headers: { Accept: 'application/json', 'User-Agent': UA, Origin: canonical(env, url) } });
+  if (!up.ok) return json({ error: 'feed_unavailable' }, 502);
+  const body = await up.text();
+  try { JSON.parse(body); } catch (e) { return json({ error: 'feed_invalid' }, 502); }
+  const res = new Response(body, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=10800', 'X-Content-Type-Options': 'nosniff' } });
+  if (cache) {
+    const put = cache.put(key, res.clone());
+    if (ctx && ctx.waitUntil) ctx.waitUntil(put); else await put;
+  }
+  return res;
 }
 
 /* ---------------- GitHub proxy, limited to this repository ---------------- */
