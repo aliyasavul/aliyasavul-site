@@ -54,7 +54,7 @@ function renderAll() {
   if (banner && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
   syncSound();
   // a song that is playing carries on in the new language
-  recSync(); recShow(); dockSync();
+  recSync(); recShow();
   if (!enabledSections(cfg).some((s) => s.id === current)) current = 'intro';
   igLoaded = false;
   if (scrollMode) {
@@ -364,6 +364,7 @@ function onScroll() {
   if (id !== current) {
     current = id;
     if (id === 'gallery') loadInstagram();
+    if (id === 'work') spPreload();
     clearTimeout(hashTimer);
     hashTimer = setTimeout(() => setHash(current), 400);
   }
@@ -509,21 +510,32 @@ function syncSound() {
   btn.setAttribute('aria-pressed', isOn ? 'true' : 'false');
   btn.title = isOn ? S('soundMute') : S('soundOn');
   const sr = $('.sr-only', btn); if (sr) sr.textContent = btn.title;
-  const k = $('#nowK', ui), v = $('#nowV', ui);
-  if (k) k.textContent = isOn ? S('nowPlaying') : S('soundOff');
-  if (v) v.textContent = t(cfg.audio.title, lang);
+  const k = $('#nowK', ui), v = $('#nowV', ui), np = $('.np', ui);
+  const on = !!song.kind;
+  document.body.classList.toggle('song', on);
+  if (np) np.hidden = !on;
+  if (on) {
+    const playing = songPlaying();
+    const state = playing ? S('nowPlaying') : song.kind === 'spotify' && song.want ? S('loading') : S('paused');
+    if (k) k.textContent = state + ' · ' + (song.kind === 'spotify' ? 'Spotify' : S('recording'));
+    if (v) v.textContent = song.title;
+    const pb = $('.np-play', ui);
+    if (pb) { pb.setAttribute('aria-pressed', playing ? 'true' : 'false'); pb.setAttribute('aria-label', (playing ? S('pause') : S('play')) + ': ' + song.title); }
+    const many = songItems().length > 1;
+    for (const b of ui.querySelectorAll('.np-prev, .np-next')) b.disabled = !many;
+  } else {
+    if (k) k.textContent = isOn ? S('nowPlaying') : S('soundOff');
+    if (v) v.textContent = t(cfg.audio.title, lang);
+  }
+  for (const b of ui.querySelectorAll('.trk')) b.classList.toggle('on', song.kind === 'spotify' && song.key === 'sp:' + b.dataset.sp);
 }
-// the visitor's own choice: a song that is playing stops for the site's sound, and closing the
-// song's player no longer brings the sound back by itself
+// the visitor turns the site's sound on: the song stops and the corner shows the sound again
 function setSound(want) {
-  dock.resume = false;
-  if (want) { recPause(); spPause(); if (dock.kind === 'spotify' && !dock.sp) dockClose(); }
+  if (want) { recPause(); spPause(); if (song.kind === 'spotify' && !song.sp) spClose(); song.kind = ''; song.key = ''; spShow(false); }
   audio.set(want); syncSound(); wake();
 }
-// a song starts: the site's sound gives way, and comes back when the song's player is closed
-function songStarts() {
-  if (audio.on) { dock.resume = true; audio.set(false); syncSound(); }
-}
+// a song starts: the site's own sound gives way to it
+function quietForSong() { if (audio.on) audio.set(false); }
 
 /* ---------------- recordings: Ali's own songs, with their outline as the progress bar ---------------- */
 
@@ -536,7 +548,7 @@ function recElement() {
     node.preload = 'none';
     node.addEventListener('play', recSync);
     node.addEventListener('pause', recSync);
-    node.addEventListener('ended', () => { recSync(); recShow(0); });
+    node.addEventListener('ended', () => { recSync(); recShow(0); if (song.kind === 'rec' && songItems().length > 1) songStep(1); });
     node.addEventListener('error', recSync);
     rec.el = node;
   }
@@ -566,9 +578,8 @@ function recSync() {
     }
   }
   syncSound();
-  dockSync();
   if (playing && !rec.raf) {
-    const loop = () => { rec.raf = recPlaying() ? requestAnimationFrame(loop) : 0; recShow(); dockProgress(); };
+    const loop = () => { rec.raf = recPlaying() ? requestAnimationFrame(loop) : 0; recShow(); };
     rec.raf = requestAnimationFrame(loop);
   }
   wake();
@@ -583,9 +594,11 @@ function recPlay(li, at) {
   }
   rec.title = li.dataset.title || '';
   rec.dur = Number(li.dataset.dur) || 0;
-  // the site's own sound gives way to the song, which shows in the corner wherever the visitor goes
-  songStarts();
-  dockRec();
+  // the song shows in the corner wherever the visitor goes; Spotify and the site's sound give way
+  spPause();
+  quietForSong();
+  song.kind = 'rec'; song.key = 'rec:' + rec.src; song.title = rec.title; song.want = false;
+  spShow(false);
   if (!audio.attach(node) && node.ayCtx) {
     // tied to an audio graph that has since been rebuilt: carry on with a fresh element
     const was = node.currentTime;
@@ -650,98 +663,53 @@ document.addEventListener('keydown', (e) => {
   recSeek(li, clamp(to / dur, 0, 1), true);
 }, true);
 
-/* ---------------- the corner player: the song that is playing, wherever the visitor is ---------------- */
-// A recording or a song from Spotify plays on while the visitor moves around the site. The bottom
-// left corner shows what it is and has a pause button and a close button; a Spotify song plays in
-// Spotify's own small player there (through its iFrame API, so the site knows when it plays).
-const dock = { el: null, kind: '', resume: false, sp: null, spRef: '', spPlaying: false, spStarted: false, spToken: 0, api: null, apiFailed: false };
+/* ---------------- songs: the bottom-left corner plays them ---------------- */
+// While a song is chosen, the corner that names the site's sound shows it instead, with play and
+// pause and the previous and next song of the portfolio (the recordings, then the Spotify songs).
+// Spotify plays in its own player, kept out of sight and driven through its iFrame API. It is made
+// when the visitor reaches the portfolio, so a song starts at once. Only if the browser will not
+// let it start by itself does that player show above the corner, for the visitor to press play.
+const song = { kind: '', key: '', title: '', want: false, sp: null, spRef: '', spPlaying: false, spToken: 0, api: null, apiFailed: false, host: null, timer: 0 };
 const SP_API = 'https://open.spotify.com/embed/iframe-api/v1';
-function dockEl() {
-  if (!dock.el) {
-    dock.el = document.createElement('div');
-    dock.el.className = 'dock';
-    dock.el.hidden = true;
-    dock.el.setAttribute('role', 'region');
-    document.body.append(dock.el);
+const songItems = () => [...ui.querySelectorAll('#p-work .rec, #p-work .trk')];
+const songKey = (el) => (el.classList.contains('rec') ? 'rec:' + el.dataset.src : 'sp:' + el.dataset.sp);
+const songPlaying = () => (song.kind === 'rec' ? recPlaying() : song.kind === 'spotify' && song.spPlaying);
+function songStep(d) {
+  const items = songItems();
+  if (!items.length) return;
+  const i = items.findIndex((el) => songKey(el) === song.key);
+  const el = items[i < 0 ? 0 : (i + d + items.length) % items.length];
+  if (el.classList.contains('rec')) recPlay(el); else spPlay(el.dataset.sp, el.dataset.title);
+}
+function songToggle() {
+  if (song.kind === 'rec') {
+    if (recPlaying()) { rec.el.pause(); return; }
+    const li = recRow(rec.src);
+    if (li) recPlay(li);
+  } else if (song.kind === 'spotify') {
+    if (song.spPlaying) spPause();
+    else { const [kind, id] = song.spRef.split('/'); if (song.sp) { song.want = true; spWatch(); try { song.sp.resume(); } catch (e) { /* press play in its player */ } } else if (kind) spPlay(song.spRef, song.title); }
   }
-  dock.el.setAttribute('aria-label', S('player'));
-  return dock.el;
-}
-const dockHead = () => '<div class="dk-h"><span class="dk-k"></span><button type="button" class="dk-x" aria-label="' + esc(S('close')) + '">' + ICON.close + '</button></div>';
-function dockShow(kind, body) {
-  const el = dockEl();
-  if (dock.kind !== kind) {
-    if (dock.kind === 'spotify') spClose();
-    el.innerHTML = dockHead() + body;
-    el.dataset.kind = kind;
-    dock.kind = kind;
-  }
-  el.hidden = false;
-  document.body.classList.add('docked');
-}
-function dockRec() {
-  if (dock.kind === 'rec') { dockSync(); return; }
-  dockShow('rec', '<div class="dk-rec"><button type="button" class="dk-play" aria-pressed="false"><span aria-hidden="true"></span></button>' +
-    '<div class="dk-m"><button type="button" class="dk-t" data-go="work"></button><span class="dk-bar" aria-hidden="true"><i></i></span></div><span class="dk-time"></span></div>');
-  dockSync();
-}
-// labels and state; also after the language changes
-function dockSync() {
-  const el = dock.el;
-  if (!el || !dock.kind) return;
-  dockEl();
-  const x = $('.dk-x', el);
-  if (x) x.setAttribute('aria-label', S('close'));
-  for (const b of ui.querySelectorAll('.trk')) b.classList.toggle('on', dock.kind === 'spotify' && b.dataset.sp === dock.spRef);
-  if (dock.kind === 'spotify') {
-    $('.dk-k', el).textContent = dock.spPlaying ? S('nowPlaying') + ' · Spotify' : 'Spotify';
-    return;
-  }
-  const playing = recPlaying();
-  const li = recRow(rec.src);
-  const title = (li && li.dataset.title) || rec.title;
-  $('.dk-k', el).textContent = (playing ? S('nowPlaying') : S('paused')) + ' · ' + S('recording');
-  const tb = $('.dk-t', el);
-  tb.textContent = title;
-  tb.title = title;
-  const pb = $('.dk-play', el);
-  pb.setAttribute('aria-pressed', playing ? 'true' : 'false');
-  pb.setAttribute('aria-label', (playing ? S('pause') : S('play')) + ': ' + title);
-  dockProgress();
-}
-function dockProgress() {
-  if (dock.kind !== 'rec' || !dock.el || !rec.el) return;
-  const dur = (isFinite(rec.el.duration) && rec.el.duration) || rec.dur || 0;
-  const cur = rec.el.currentTime || 0;
-  dock.el.style.setProperty('--p', dur ? Math.min(1, cur / dur).toFixed(4) : '0');
-  const tm = $('.dk-time', dock.el);
-  if (tm) tm.textContent = mmss(cur) + ' / ' + mmss(dur);
-}
-function dockToggle() {
-  if (dock.kind !== 'rec' || !rec.el) return;
-  if (recPlaying()) { rec.el.pause(); return; }
-  const li = recRow(rec.src);
-  if (li) { recPlay(li); return; }
-  songStarts();
-  const pr = rec.el.play();
-  if (pr && pr.catch) pr.catch(() => recSync());
-}
-function dockClose() {
-  if (dock.kind === 'rec') recPause();
-  if (dock.kind === 'spotify') spClose();
-  dock.kind = '';
-  dock.spRef = '';
-  if (dock.el) { dock.el.hidden = true; dock.el.innerHTML = ''; delete dock.el.dataset.kind; }
-  document.body.classList.remove('docked');
-  for (const b of ui.querySelectorAll('.trk.on')) b.classList.remove('on');
-  if (dock.resume) { dock.resume = false; audio.set(true); syncSound(); wake(); }
+  syncSound();
 }
 
-// Spotify: its player in the corner. The iFrame API lets the site start it and hear when it
-// plays or stops; if the API cannot load, the plain player is used and the visitor presses play.
+function spHost() {
+  if (!song.host) {
+    song.host = document.createElement('div');
+    song.host.className = 'sp-host';
+    document.body.append(song.host);
+  }
+  return song.host;
+}
+function spShow(on) { if (song.host) song.host.classList.toggle('show', !!on); }
+// a few seconds without the song starting: the browser wants a press on Spotify's own player
+function spWatch() {
+  clearTimeout(song.timer);
+  song.timer = setTimeout(() => { if (song.kind === 'spotify' && song.want && !song.spPlaying) { spShow(true); song.want = false; syncSound(); } }, 3500);
+}
 function spotifyApi() {
-  if (!dock.api) {
-    dock.api = new Promise((resolve, reject) => {
+  if (!song.api) {
+    song.api = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('spotify api timeout')), 8000);
       window.onSpotifyIframeApiReady = (api) => { clearTimeout(timer); resolve(api); };
       const sc = document.createElement('script');
@@ -751,72 +719,87 @@ function spotifyApi() {
       document.body.append(sc);
     });
   }
-  return dock.api;
+  return song.api;
 }
-function dockSpotify(ref, title) {
+const spValid = (kind, id) => /^(track|album|playlist|episode|show|artist)$/.test(kind || '') && /^[A-Za-z0-9]{22}$/.test(id || '');
+// Spotify's player, made for `ref` (kind/id); `start` plays it as soon as it is up
+function spMake(ref, start) {
+  const [kind, id] = ref.split('/');
+  const host = spHost();
+  const token = ++song.spToken;
+  song.spRef = ref;
+  const plain = () => {
+    if (token !== song.spToken) return;
+    host.innerHTML = '<iframe src="https://open.spotify.com/embed/' + kind + '/' + id + '?utm_source=generator&theme=0" title="Spotify" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>';
+    // the plain player cannot be started from the site: it shows so the visitor can press play
+    if (start) { spShow(true); song.want = false; syncSound(); }
+  };
+  if (song.apiFailed) { plain(); return; }
+  spotifyApi().then((api) => {
+    if (token !== song.spToken) return;
+    host.innerHTML = '';
+    const el = document.createElement('div');
+    host.append(el);
+    api.createController(el, { uri: 'spotify:' + kind + ':' + id, url: 'https://open.spotify.com/' + kind + '/' + id + '?theme=0', width: '100%', height: 80 }, (ctrl) => {
+      if (token !== song.spToken) { try { ctrl.destroy(); } catch (e) { /* gone */ } return; }
+      song.sp = ctrl;
+      ctrl.addListener('ready', () => {
+        if (song.sp === ctrl && start && song.want && song.spRef === ref) { try { ctrl.play(); } catch (e) { /* see spWatch */ } }
+      });
+      ctrl.addListener('playback_update', (ev) => {
+        if (song.sp !== ctrl) return;
+        const playing = !((ev && ev.data) || {}).isPaused;
+        if (playing && !song.spPlaying) {
+          // the song plays: the corner names it, and a recording or the site's sound stops for it
+          spShow(false);
+          song.want = false;
+          recPause();
+          quietForSong();
+          if (song.kind !== 'spotify' || song.key !== 'sp:' + song.spRef) {
+            const b = [...ui.querySelectorAll('.trk')].find((x) => x.dataset.sp === song.spRef);
+            song.kind = 'spotify'; song.key = 'sp:' + song.spRef; song.title = (b && b.dataset.title) || 'Spotify';
+          }
+        }
+        song.spPlaying = playing;
+        syncSound();
+      });
+    });
+  }).catch(() => { song.apiFailed = true; plain(); });
+}
+function spPlay(ref, title) {
   const [kind, id] = String(ref || '').split('/');
-  if (!/^(track|album|playlist|episode|show|artist)$/.test(kind) || !/^[A-Za-z0-9]{22}$/.test(id || '')) return;
+  if (!spValid(kind, id)) return;
+  // the same song, already playing: the button pauses it
+  if (song.kind === 'spotify' && song.key === 'sp:' + ref && song.spPlaying) { spPause(); return; }
   recPause();
-  songStarts();
-  dockShow('spotify', '<div class="dk-sp"></div>');
-  const same = dock.spRef === ref && dock.sp;
-  dock.spRef = ref;
-  dock.spTitle = title || 'Spotify';
-  dockSync();
-  if (same) { try { dock.sp.resume(); } catch (e) { /* the visitor can press play */ } return; }
-  const uri = 'spotify:' + kind + ':' + id;
-  const host = $('.dk-sp', dock.el);
-  const token = ++dock.spToken;
-  if (dock.sp) {
-    // the player is already there: load the new song into it and start it
+  quietForSong();
+  song.kind = 'spotify'; song.key = 'sp:' + ref; song.title = title || 'Spotify'; song.want = true;
+  spShow(false);
+  spWatch();
+  syncSound();
+  if (song.sp && song.spRef === ref) { try { song.sp.resume(); } catch (e) { /* see spWatch */ } return; }
+  if (song.sp) {
     try {
-      if (typeof dock.sp.loadEntity === 'function') dock.sp.loadEntity(uri); else dock.sp.loadUri(uri);
-      dock.sp.play();
+      song.spRef = ref;
+      if (typeof song.sp.loadEntity === 'function') song.sp.loadEntity('spotify:' + kind + ':' + id); else song.sp.loadUri('spotify:' + kind + ':' + id);
+      song.sp.play();
       return;
     } catch (e) { spClose(); }
   }
-  const plain = () => {
-    if (token !== dock.spToken || dock.kind !== 'spotify') return;
-    host.innerHTML = '<iframe src="https://open.spotify.com/embed/' + kind + '/' + id + '?utm_source=generator&theme=0" title="' + esc(dock.spTitle) + '" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>';
-    $('iframe', host).addEventListener('load', () => host.classList.add('ready'), { once: true });
-  };
-  if (dock.apiFailed) { plain(); return; }
-  spotifyApi().then((api) => {
-    if (token !== dock.spToken || dock.kind !== 'spotify') return;
-    host.innerHTML = '';
-    const spot = document.createElement('div');
-    host.append(spot);
-    api.createController(spot, { uri, url: 'https://open.spotify.com/' + kind + '/' + id + '?theme=0', width: '100%', height: 80 }, (ctrl) => {
-      if (token !== dock.spToken || dock.kind !== 'spotify') { try { ctrl.destroy(); } catch (e) { /* gone */ } return; }
-      dock.sp = ctrl;
-      dock.spStarted = false;
-      // the player fades in once it is up, so there is no white flash on the dark page
-      setTimeout(() => host.classList.add('ready'), 2500);
-      ctrl.addListener('ready', () => {
-        host.classList.add('ready');
-        const fr = $('iframe', host);
-        if (fr) fr.title = dock.spTitle;
-        if (dock.sp !== ctrl || dock.spStarted) return;
-        dock.spStarted = true;
-        try { ctrl.play(); } catch (e) { /* some browsers want a press on the player itself */ }
-      });
-      ctrl.addListener('playback_update', (ev) => {
-        if (dock.sp !== ctrl) return;
-        const d = (ev && ev.data) || {};
-        const playing = !d.isPaused;
-        // the song plays: a recording or the site's sound stops for it
-        if (playing && !dock.spPlaying) { recPause(); songStarts(); }
-        dock.spPlaying = playing;
-        dockSync();
-      });
-    });
-  }).catch(() => { dock.apiFailed = true; plain(); });
+  spMake(ref, true);
 }
-function spPause() { if (dock.sp && dock.spPlaying) { try { dock.sp.pause(); } catch (e) { /* gone */ } } }
+// made ahead when the visitor reaches the portfolio, so the first song starts without waiting
+function spPreload() {
+  if (song.sp || song.spToken) return;
+  const b = ui.querySelector('#p-work .trk');
+  if (b && /\//.test(b.dataset.sp || '')) spMake(b.dataset.sp, false);
+}
+function spPause() { if (song.sp && song.spPlaying) { try { song.sp.pause(); } catch (e) { /* gone */ } } }
 function spClose() {
-  dock.spToken++;
-  if (dock.sp) { try { dock.sp.destroy(); } catch (e) { /* gone */ } }
-  dock.sp = null; dock.spPlaying = false; dock.spStarted = false;
+  song.spToken++;
+  if (song.sp) { try { song.sp.destroy(); } catch (e) { /* gone */ } }
+  if (song.host) { song.host.innerHTML = ''; spShow(false); }
+  song.sp = null; song.spRef = ''; song.spPlaying = false;
 }
 
 /* ---------------- logo: spectral glitch only where the pointer moves ---------------- */
@@ -1148,8 +1131,9 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (el.dataset.lang) return setLang(el.dataset.lang);
-  if (el.classList.contains('dk-x')) return dockClose();
-  if (el.classList.contains('dk-play')) return dockToggle();
+  if (el.classList.contains('np-play')) return songToggle();
+  if (el.classList.contains('np-prev')) return songStep(-1);
+  if (el.classList.contains('np-next')) return songStep(1);
   if (el.dataset.go) {
     e.preventDefault();
     // a button on the start screen goes in first
@@ -1159,7 +1143,7 @@ document.addEventListener('click', (e) => {
   }
   if (el.classList.contains('rec-play')) return recToggle(el.closest('.rec'));
   if (el.dataset.yt) return openVideo(el.dataset.yt, el.dataset.title);
-  if (el.dataset.sp) return dockSpotify(el.dataset.sp, el.dataset.title);
+  if (el.dataset.sp) return spPlay(el.dataset.sp, el.dataset.title);
   if (el.dataset.img !== undefined) return openPhoto(Number(el.dataset.img));
   if (el.dataset.copy) return copyText(el, el.dataset.copy);
 });

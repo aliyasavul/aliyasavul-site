@@ -106,11 +106,13 @@ export const DEFAULTS = {
   },
   header: { cta: { label: bi('Ders al', 'Book a lesson'), target: 'lessons' } },
   banner: { enabled: false, text: bi('Kasım için 2 öğrenci yeri kaldı.', '2 student spots left for November.'), linkLabel: bi('Yer ayırt', 'Save a spot'), link: '' },
-  intro: { nav: bi('Giriş', 'Intro'), era: bi('Bugün', 'Today'), stamp: '0' },
+  intro: { nav: bi('Giriş', 'Intro'), era: bi('Bugün', 'Today'), stamp: '0', stage: bi('', '') },
+  // the timeline's text sizes (px, and % for the big name), and what phones show above the dots
+  timeline: { stageSize: 11, nameSize: 100, subSize: 11, phoneTop: 'stamp' },
   sections: [
     {
       id: 'about', enabled: true, stamp: '23',
-      nav: bi('Hakkımda', 'About'),
+      nav: bi('Hakkımda', 'About'), stage: bi('', ''),
       era: bi('23 milyon yıl önce · Miyosen', '23 million years ago · Miocene'),
       title: bi('Hakkımda', 'About'),
       body: bi(
@@ -126,7 +128,7 @@ export const DEFAULTS = {
     },
     {
       id: 'lessons', enabled: true, stamp: '34',
-      nav: bi('Dersler', 'Lessons'),
+      nav: bi('Dersler', 'Lessons'), stage: bi('', ''),
       era: bi('34 milyon yıl önce · Oligosen', '34 million years ago · Oligocene'),
       title: bi('Gitar dersleri', 'Guitar lessons'),
       body: bi(
@@ -146,7 +148,7 @@ export const DEFAULTS = {
     },
     {
       id: 'work', enabled: true, stamp: '56',
-      nav: bi('Portfolyo', 'Work'),
+      nav: bi('Portfolyo', 'Work'), stage: bi('', ''),
       era: bi('56 milyon yıl önce · Eosen', '56 million years ago · Eocene'),
       title: bi('Portfolyo', 'Work'),
       body: bi(
@@ -167,7 +169,7 @@ export const DEFAULTS = {
     },
     {
       id: 'gallery', enabled: true, stamp: '66',
-      nav: bi('Galeri', 'Gallery'),
+      nav: bi('Galeri', 'Gallery'), stage: bi('', ''),
       era: bi("66 milyon yıl önce · Kretase'nin sonu", '66 million years ago · End of the Cretaceous'),
       title: bi('Galeri', 'Gallery'),
       body: bi('', ''),
@@ -177,7 +179,7 @@ export const DEFAULTS = {
     },
     {
       id: 'contact', enabled: true, stamp: '99 MA',
-      nav: bi('İletişim', 'Contact'),
+      nav: bi('İletişim', 'Contact'), stage: bi('', ''),
       era: bi('99 milyon yıl önce · Kehribardaki dinozor kuyruğu', '99 million years ago · The dinosaur tail in amber'),
       title: bi('İletişim', 'Contact'),
       body: bi(
@@ -199,6 +201,7 @@ export const DEFAULTS = {
     soundOff: bi('Ses kapalı', 'Sound off'),
     nowPlaying: bi('Çalıyor', 'Now playing'),
     paused: bi('Duraklatıldı', 'Paused'),
+    loading: bi('Yükleniyor', 'Loading'),
     recording: bi('Kayıt', 'Recording'),
     player: bi('Çalan şarkı', 'Now playing'),
     soundOn: bi('Sesi aç', 'Sound on'),
@@ -342,6 +345,11 @@ export function normalize(raw) {
   }));
   out.gate.extras = cleanExtras(out.gate.extras);
   for (const s of out.sections) s.extras = cleanExtras(s.extras);
+  const tl = out.timeline;
+  tl.stageSize = clampNum(tl.stageSize, 8, 24, 11);
+  tl.nameSize = clampNum(tl.nameSize, 50, 150, 100);
+  tl.subSize = clampNum(tl.subSize, 8, 20, 11);
+  if (!['stamp', 'stage', 'both'].includes(tl.phoneTop)) tl.phoneTop = 'stamp';
   out.audio.volume = clampNum(out.audio.volume, 0, 100, 70);
   if (!['auto', 'tr', 'en'].includes(out.site.defaultLang)) out.site.defaultLang = 'auto';
   const lg = out.media.logo;
@@ -503,6 +511,9 @@ export function themeCSS(cfg) {
     '--glow:' + rgba(c.glow, 0.5),
     '--glow-base:' + (0.02 + 0.06 * (e.glow / 50)).toFixed(3),
     '--tl-light:' + c.timeline,
+    '--tl-stage:' + cfg.timeline.stageSize + 'px',
+    '--tl-name:' + cfg.timeline.nameSize / 100,
+    '--tl-sub:' + cfg.timeline.subSize + 'px',
     '--stone-filter:hue-rotate(' + cfg.theme.stone.hue + 'deg) saturate(' + (cfg.theme.stone.saturation / 100) + ') brightness(' + (cfg.theme.stone.brightness / 100) + ')',
     '--logo-src:url("' + logoUrl + '")',
     '--logo-ar:' + logo.width + ' / ' + logo.height,
@@ -515,7 +526,7 @@ export function themeCSS(cfg) {
 /* ---------------- structure ---------------- */
 
 export function enabledSections(cfg) {
-  const list = [{ id: 'intro', nav: cfg.intro.nav, era: cfg.intro.era, stamp: cfg.intro.stamp }];
+  const list = [{ id: 'intro', nav: cfg.intro.nav, era: cfg.intro.era, stamp: cfg.intro.stamp, stage: cfg.intro.stage }];
   for (const s of cfg.sections) if (s.enabled) list.push(s);
   return list;
 }
@@ -728,12 +739,15 @@ export function renderUI(cfg, lang) {
 
   html += '<div class="top">';
   html += '<button type="button" class="brand" data-go="intro" aria-label="' + esc(S('backToStart')) + '"><span class="logo" aria-hidden="true"></span></button>';
-  html += '<nav class="timeline" style="--n:' + n + '" aria-label="' + esc(S('sections')) + '"><div class="tl-track" aria-hidden="true"><span class="tl-fill"></span><span class="tl-mark"></span></div><ol>';
+  const top = cfg.timeline.phoneTop;
+  html += '<nav class="timeline" data-top="' + top + '" style="--n:' + n + '" aria-label="' + esc(S('sections')) + '"><div class="tl-track" aria-hidden="true"><span class="tl-fill"></span><span class="tl-mark"></span></div><ol>';
   for (const s of secs) {
-    const name = L(s.nav), era = L(s.era);
-    html += '<li><button type="button" class="stop" data-go="' + s.id + '" aria-current="false" aria-label="' + esc(name + (era && s.id !== 'intro' ? ', ' + era : '')) + '">' +
-      '<span class="ma">' + esc(s.stamp) + '</span><span class="dot"></span><span class="name">' + esc(name) + '</span>' +
-      '<span class="hl" aria-hidden="true"><b>' + esc(name) + '</b><i>' + esc(era) + '</i></span></button></li>';
+    const name = L(s.nav), era = L(s.era), stage = L(s.stage);
+    // above the dot on phones: the number, the small line (Evre 1…) or both
+    const above = top === 'stamp' || !stage ? esc(s.stamp) : top === 'stage' ? esc(stage) : '<span class="st">' + esc(stage) + '</span>' + esc(s.stamp);
+    html += '<li><button type="button" class="stop" data-go="' + s.id + '" aria-current="false" aria-label="' + esc([stage, name, era && s.id !== 'intro' ? era : ''].filter(Boolean).join(', ')) + '">' +
+      '<span class="ma">' + above + '</span><span class="dot"></span><span class="name">' + esc(name) + '</span>' +
+      '<span class="hl" aria-hidden="true">' + (stage ? '<em>' + esc(stage) + '</em>' : '') + '<b>' + esc(name) + '</b>' + (era ? '<i>' + esc(era) + '</i>' : '') + '</span></button></li>';
   }
   html += '</ol></nav>';
   const other = lang === 'tr' ? 'en' : 'tr';
@@ -741,7 +755,11 @@ export function renderUI(cfg, lang) {
   html += actionHTML(cfg, cfg.header.cta, lang, 'cta');
   html += '</div></div><div class="spacer"></div>';
 
-  html += '<div class="bottom"><div class="now" aria-live="polite"><span class="k" id="nowK">' + esc(S('soundOff')) + '</span><span class="v" id="nowV">' + esc(L(cfg.audio.title)) + '</span></div>' +
+  html += '<div class="bottom"><div class="now"><span class="np" role="group" aria-label="' + esc(S('player')) + '" hidden>' +
+    '<button type="button" class="np-b np-prev" aria-label="' + esc(S('prev')) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5.5v13"/><path class="f" d="M18 5.8v12.4L9.2 12z"/></svg></button>' +
+    '<button type="button" class="np-b np-play" aria-pressed="false" aria-label="' + esc(S('play')) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="f i-play" d="M8.5 5.5v13L19 12z"/><path class="i-pause" d="M9 6v12M15 6v12"/></svg></button>' +
+    '<button type="button" class="np-b np-next" aria-label="' + esc(S('next')) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 5.5v13"/><path class="f" d="M6 5.8v12.4l8.8-6.2z"/></svg></button></span>' +
+    '<span class="now-t" aria-live="polite"><span class="k" id="nowK">' + esc(S('soundOff')) + '</span><span class="v" id="nowV">' + esc(L(cfg.audio.title)) + '</span></span></div>' +
     '<span class="hint">' + esc(S('scrollHint')) + ' · ' + esc(S('dragHint')) + '</span>' +
     '<button type="button" class="sound" id="soundBtn" aria-pressed="false" title="' + esc(S('soundOn')) + '"><span class="sr-only">' + esc(S('soundOn')) + '</span>' +
     '<svg viewBox="0 0 56 20" aria-hidden="true"><g class="amp"><path class="w" d="M0 10 Q 3.75 2 7.5 10 T 15 10 T 22.5 10 T 30 10 T 37.5 10 T 45 10 T 52.5 10 T 60 10 T 67.5 10 T 75 10 T 82.5 10 T 90 10"/></g></svg></button></div>';

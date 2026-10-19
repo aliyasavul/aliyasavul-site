@@ -523,7 +523,7 @@ const COLOR_LABELS = {
 const PRESET_NAMES = { amber: 'Kehribar', bone: 'Kemik', blood: 'Kan', ash: 'Kül', toxic: 'Zehir' };
 const STONE_NAMES = { natural: 'Doğal', honey: 'Bal', cherry: 'Kiraz', cognac: 'Konyak', lemon: 'Limon', green: 'Yeşil kehribar' };
 const STRING_LABELS = {
-  soundOff: 'Alt köşe: ses kapalıyken', nowPlaying: 'Alt köşe: ses açıkken / şarkı çalarken', paused: 'Alt köşe: şarkı duraklatılınca', recording: 'Alt köşe: kendi kaydın çalarken', player: 'Alt köşedeki çalan şarkı (sesli okuyucu)', soundOn: 'Ses düğmesi: aç', soundMute: 'Ses düğmesi: kapat',
+  soundOff: 'Alt köşe: ses kapalıyken', nowPlaying: 'Alt köşe: ses açıkken / şarkı çalarken', paused: 'Alt köşe: şarkı duraklatılınca', loading: 'Alt köşe: Spotify şarkısı açılırken', recording: 'Alt köşe: kendi kaydın çalarken', player: 'Alt köşedeki çalan şarkı (sesli okuyucu)', soundOn: 'Ses düğmesi: aç', soundMute: 'Ses düğmesi: kapat',
   dragHint: 'Alttaki ipucu (bilgisayar)', scrollHint: 'Kaydır ipucu (telefon)', copy: 'Kopyala düğmesi', copied: 'Kopyalandı mesajı', selected: 'Seçildi mesajı', email: 'E-posta etiketi',
   whatsapp: 'WhatsApp düğmesi', watch: 'Video izle etiketi', listen: 'Şarkı dinle etiketi (sesli okuyucu)', onSpotify: 'Spotify listesinin başlığı', recordings: 'Kayıtlar listesinin başlığı', play: 'Çal düğmesi (sesli okuyucu)', pause: 'Duraklat düğmesi (sesli okuyucu)', seek: 'Şarkıda ilerleme çubuğu (sesli okuyucu)', close: 'Kapat', prev: 'Önceki', next: 'Sonraki',
   backToStart: 'Logo düğmesi (sesli okuyucu)', sections: 'Menü açıklaması (sesli okuyucu)', stoneLabel: 'Taş videosu açıklaması (sesli okuyucu)',
@@ -554,7 +554,7 @@ function setIn(obj, path, value) {
   const parent = parts.reduce(step, obj);
   if (parent != null) parent[last] = value;
 }
-const MENU_KEYS = ['enabled', 'nav', 'stamp', 'era'];
+const MENU_KEYS = ['enabled', 'nav', 'stamp', 'era', 'stage'];
 const contentPaths = (id) => Object.keys(DEFAULTS.sections.find((s) => s.id === id) || {}).filter((k) => k !== 'id' && !MENU_KEYS.includes(k)).map((k) => 'sections.@' + id + '.' + k);
 const RESETS = [
   { id: 'colors', look: true, label: 'Renkler', hint: 'Bütün renkler ilk tema olan “Kehribar”a döner.', paths: ['theme.colors', 'theme.preset'] },
@@ -573,6 +573,7 @@ const RESETS = [
       d.sections = ORIGINAL.sections.map((o) => { const s = byId.get(o.id) || clone(o); for (const k of MENU_KEYS) s[k] = clone(o[k]); return s; });
     },
   },
+  { id: 'timeline', label: 'Zaman çizelgesinin yazı boyutları', paths: ['timeline'] },
   { id: 'about', label: 'Hakkımda', hint: 'Başlık, yazı ve bilgi satırları örnek haline döner.', paths: contentPaths('about') },
   { id: 'lessons', label: 'Dersler', hint: 'Paketler ve fiyatlar da örnek haline döner.', paths: contentPaths('lessons') },
   { id: 'work', label: 'Portfolyo', hint: 'Eklediğin YouTube videoları, kayıtlar ve Spotify şarkıları listeden çıkar.', paths: contentPaths('work') },
@@ -754,6 +755,32 @@ function tabSections() {
         fBi('sections.' + i + '.nav', 'Menüdeki adı'),
         fText('sections.' + i + '.stamp', 'Zaman çizelgesindeki rakam'),
         fBi('sections.' + i + '.era', 'Tarih satırı', { hint: 'Panelde başlığın üstünde ve menüde üzerine gelince görünür. “ · ” ile iki parçaya ayırabilirsin.' }))))),
+  ];
+}
+
+// the line of stops at the top: each stop's small line above its name (Evre 1…), its name, the
+// line under it and its number, and the sizes of these texts
+function tabTimeline() {
+  const stops = [{ p: 'intro', name: 'Giriş' }, ...S.draft.sections.map((s, i) => ({ p: 'sections.' + i, name: SECTION_NAMES[s.id] || s.id, off: !s.enabled }))];
+  const px = (v) => v + ' px';
+  return [
+    h('p', { class: 'note', text: 'Üstteki zaman çizelgesi. Bilgisayarda bir noktanın üzerine gelince en üstte küçük “üst yazı” (örneğin Evre 1), ortada büyük adı, altında “alt yazı” görünür. Telefonda noktanın üstünde rakam (istersen üst yazı), altında adı yazar. Bir yazıyı gizlemek için TR ve EN kutularını boş bırak.' }),
+    group('Yazıların boyutu', null,
+      fRange('timeline.stageSize', 'Üst yazı (Evre 1…)', { min: 8, max: 24, fmt: px }),
+      fRange('timeline.nameSize', 'Ad (üzerine gelince çıkan büyük yazı)', { min: 50, max: 150, step: 5, fmt: (v) => '%' + v }),
+      fRange('timeline.subSize', 'Alt yazı', { min: 8, max: 20, fmt: px }),
+      fSelect('timeline.phoneTop', 'Telefonda noktaların üstünde', [
+        { value: 'stamp', label: 'Rakam (0, 23, 34…)' },
+        { value: 'stage', label: 'Üst yazı (Evre 1…); yazılmamışsa rakam' },
+        { value: 'both', label: 'İkisi de: üst yazı, altında rakam' },
+      ])),
+    h('div', { class: 'list' }, stops.map((st) => h('div', { class: 'card' + (st.off ? ' off' : '') },
+      h('div', { class: 'card-h' }, h('b', { text: st.name + (st.off ? ' · gizli' : '') })),
+      h('div', { class: 'card-b' },
+        fBi(st.p + '.stage', 'Üst yazı', { placeholder: { tr: 'Örneğin: Evre 1', en: 'e.g. Stage 1' } }),
+        fBi(st.p + '.nav', 'Adı'),
+        fBi(st.p + '.era', 'Alt yazı', { hint: (st.p === 'intro' ? '' : 'Bölümün sayfasında başlığın üstünde de görünür. ') + 'Gizlemek için iki kutuyu da (TR ve EN) boş bırak.' }),
+        fText(st.p + '.stamp', 'Rakam', { hint: 'Telefonda noktanın üstünde.' }))))),
   ];
 }
 
@@ -1239,6 +1266,7 @@ const TABS = [
   { id: 'media', group: 'Görünüm', label: 'Logo', focus: 'intro', render: tabMedia },
   { id: 'gate', group: 'İçerik', label: 'Giriş ve üst düğme', focus: 'gate', render: tabGate },
   { id: 'sections', group: 'İçerik', label: 'Menü ve bölümler', focus: null, render: tabSections },
+  { id: 'timeline', group: 'İçerik', label: 'Zaman çizelgesi', focus: null, render: tabTimeline },
   { id: 'about', group: 'İçerik', label: 'Hakkımda', focus: 'about', render: tabAbout },
   { id: 'lessons', group: 'İçerik', label: 'Dersler', focus: 'lessons', render: tabLessons },
   { id: 'work', group: 'İçerik', label: 'Portfolyo, YouTube, Spotify', focus: 'work', render: tabWork },

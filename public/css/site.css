@@ -140,8 +140,12 @@ a { color: inherit; }
   text-shadow: 0 2px 20px var(--shadow); isolation: isolate;
 }
 .stop .hl::before { content: ""; position: absolute; inset: -22px -56px; z-index: -1; background: radial-gradient(closest-side, var(--scrim), transparent); }
-.stop .hl b { font: 600 clamp(34px, 3.4vw, 50px)/0.9 var(--f-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
-.stop .hl i { font: 500 11px/1.2 var(--f-mono); font-style: normal; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.stop .hl b { font: 600 calc(clamp(34px, 3.4vw, 50px) * var(--tl-name, 1))/0.9 var(--f-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
+.stop .hl em { font: 500 var(--tl-stage, 11px)/1.2 var(--f-mono); font-style: normal; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.stop .hl i { font: 500 var(--tl-sub, 11px)/1.2 var(--f-mono); font-style: normal; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.stop .ma .st { display: block; font-size: min(var(--tl-stage, 11px), 12px); line-height: 14px; letter-spacing: 0.08em; text-transform: uppercase; }
+.timeline[data-top="both"] .stop { grid-template-rows: auto 28px 16px; }
+.timeline[data-top="stage"] .stop .ma { text-transform: uppercase; font-size: min(var(--tl-stage, 11px), 12px); }
 @media (hover: hover) {
   .stop .ma, .stop .name { opacity: 0; }
   .stop:hover .hl, .stop:focus-visible .hl { opacity: 1; transform: translate(-50%, 0); }
@@ -164,7 +168,8 @@ body.in-section .mark { opacity: 0; transform: translate(-50%, 24px); }
 
 /* bottom row */
 .bottom { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 12px; }
-.now { justify-self: start; display: grid; gap: 2px; min-width: 0; }
+.now { justify-self: start; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.now-t { display: grid; gap: 2px; min-width: 0; }
 .now .k { font: 500 11px/1.2 var(--f-mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 .now .v { font: 600 15px/1.25 var(--f-display); letter-spacing: 0.12em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hint { font: 500 11px/1.2 var(--f-mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); transition: opacity .8s; }
@@ -311,37 +316,30 @@ body.in-section .top::before, body.in-section .bottom::before { opacity: 1; }
 .rec-wave:hover .bg path { fill: color-mix(in srgb, var(--text) 36%, transparent); }
 .trk.on .trk-play { border-color: var(--accent); background: var(--accent-soft); }
 
-/* the corner player: the song that is playing, in the bottom left wherever the visitor goes */
-.dock {
-  position: fixed; z-index: 4; left: var(--gutter-l); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  width: min(360px, calc(100vw - var(--gutter-l) - var(--gutter-r) - 84px)); padding: 8px 10px 10px;
-  background: var(--scrim); border: 1px solid var(--line);
-  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); text-shadow: none;
+/* the song's buttons in the bottom-left corner, beside its name */
+.np { display: flex; align-items: center; gap: 2px; flex: none; }
+.np[hidden] { display: none; }
+.np-b { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; border: 0; background: none; cursor: pointer; color: var(--text); }
+.np-b svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.np-b svg .f { fill: currentColor; stroke: none; }
+.np-play { width: 40px; height: 40px; margin: 0 2px; border: 1px solid var(--line-strong); border-radius: 50%; }
+.np-play svg { width: 18px; height: 18px; }
+.np-play .i-pause, .np-play[aria-pressed="true"] .i-play { display: none; }
+.np-play[aria-pressed="true"] .i-pause { display: inline; }
+.np-b:hover, .np-b:focus-visible { color: var(--accent); }
+.np-play:hover, .np-play:focus-visible { border-color: var(--accent); }
+.np-b:disabled { opacity: .3; cursor: default; color: var(--text); }
+body.song .now .k { color: var(--accent); }
+/* Spotify's own player: out of sight while the site drives it; it shows above the corner only when
+   the browser wants a press on it to start */
+.sp-host {
+  position: fixed; z-index: 4; left: var(--gutter-l); bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  width: min(340px, calc(100vw - var(--gutter-l) - var(--gutter-r))); height: 80px; border-radius: 12px; overflow: hidden;
+  opacity: 0; pointer-events: none; transition: opacity .3s ease;
 }
-.dock[hidden], body.gated .dock { display: none; }
-body.docked .now, body.docked .hint { visibility: hidden; }
-.dk-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 22px; }
-.dk-k { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 10px/1.2 var(--f-mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
-.dk-x { flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: -6px -8px -6px 0; padding: 0; border: 0; background: none; cursor: pointer; color: var(--muted); }
-.dk-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.dk-x:hover { color: var(--text); }
-.dk-rec { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; margin-top: 6px; }
-.dk-play { position: relative; width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 1px solid var(--line-strong); background: none; cursor: pointer; }
-.dk-play span { position: absolute; left: 15px; top: 12px; border-style: solid; border-width: 7px 0 7px 10px; border-color: transparent transparent transparent var(--text); }
-.dk-play[aria-pressed="true"] span { left: 13px; top: 12px; width: 12px; height: 14px; border: 0; background: linear-gradient(90deg, var(--text) 0 4px, transparent 4px 8px, var(--text) 8px 12px); }
-.dk-play:hover, .dk-play:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
-.dk-m { min-width: 0; }
-.dk-t {
-  display: block; max-width: 100%; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
-  font: 600 15px/1.25 var(--f-display); letter-spacing: 0.1em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.dk-t:hover { color: var(--accent); }
-.dk-bar { position: relative; display: block; height: 2px; margin-top: 7px; background: color-mix(in srgb, var(--text) 22%, transparent); overflow: hidden; }
-.dk-bar i { position: absolute; inset: 0; transform-origin: left; transform: scaleX(var(--p, 0)); background: var(--accent); }
-.dk-time { font: 500 11px/1 var(--f-mono); letter-spacing: 0.04em; color: var(--muted); font-variant-numeric: tabular-nums; }
-.dk-sp { height: 80px; margin-top: 6px; border-radius: 12px; overflow: hidden; background: #121212; }
-.dk-sp iframe { width: 100%; height: 80px; border: 0; display: block; background: transparent; opacity: 0; transition: opacity .35s ease; }
-.dk-sp.ready iframe { opacity: 1; }
+.sp-host.show { opacity: 1; pointer-events: auto; }
+.sp-host iframe { width: 100%; height: 80px; border: 0; display: block; }
+body.gated .sp-host { display: none; }
 .ig { margin-top: 26px; }
 .ig-grid { margin-top: 10px; }
 .ig-grid:empty { display: none; }
