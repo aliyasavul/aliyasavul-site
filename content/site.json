@@ -79,9 +79,25 @@
   },
   "gate": {
     "tagline": {
-      "tr": "Gitarist · Eğitmen · Session Müzisyeni Gitar kayıtları, müzikal düzenlemeler ve birebir gitar dersleri",
-      "en": "Guitarist · Instructor · Session Musician Guitar recording , musical arrangements and private guitar lessons"
+      "tr": "Gitarist · Eğitmen · Session Müzisyeni",
+      "en": "Guitarist · Instructor · Session Musician"
     },
+    "extras": [
+      {
+        "kind": "small",
+        "text": {
+          "tr": "Gitar kayıtları, müzikal düzenlemeler ve birebir gitar dersleri",
+          "en": "Guitar recording, musical arrangements and private guitar lessons"
+        },
+        "value": {
+          "tr": "",
+          "en": ""
+        },
+        "url": "",
+        "target": "link",
+        "style": "ghost"
+      }
+    ],
     "start": {
       "tr": "Siteyi Keşfet",
       "en": "Click to start"

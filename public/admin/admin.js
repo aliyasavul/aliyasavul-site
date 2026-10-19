@@ -439,7 +439,8 @@ function fileButton(text, accept, multiple, onFiles, iconName = 'img') {
   return [h('button', { type: 'button', class: 'btn small', onclick: () => input.click() }, icon(iconName), text), input];
 }
 
-function listEditor({ path, itemTitle, fields, newItem, addLabel, empty, off }) {
+// `adds` puts several add buttons under the list, each with its own kind of new item
+function listEditor({ path, itemTitle, fields, newItem, addLabel, empty, off, adds }) {
   const arr = get(path) || [];
   const wrap = h('div', { class: 'list' });
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; changed({ rerender: true }); };
@@ -461,8 +462,47 @@ function listEditor({ path, itemTitle, fields, newItem, addLabel, empty, off }) 
   });
   if (!arr.length && empty) wrap.append(h('p', { class: 'empty', text: empty }));
   if (newItem) wrap.append(h('button', { type: 'button', class: 'btn small add', onclick: () => { arr.push(newItem()); changed({ rerender: true }); } }, icon('plus'), addLabel));
+  if (adds) wrap.append(h('div', { class: 'row adds' }, adds.map((a) => h('button', { type: 'button', class: 'btn small add', onclick: () => { arr.push(a.newItem()); changed({ rerender: true }); } }, icon('plus'), a.label))));
   return wrap;
 }
+
+/* ---- rows of his own: on the start screen under the logo's line, and at the end of every section ---- */
+
+const EXTRA_KINDS = [
+  { value: 'text', label: 'Yazı satırı' },
+  { value: 'small', label: 'Küçük açıklama' },
+  { value: 'heading', label: 'Ara başlık' },
+  { value: 'pair', label: 'İki sütunlu satır' },
+  { value: 'button', label: 'Düğme' },
+];
+const newExtra = (kind) => () => ({ kind, text: bi(), value: bi(), url: '', target: 'link', style: 'ghost' });
+function extraFields(ip, item) {
+  const out = [fSelect(ip + '.kind', 'Türü', EXTRA_KINDS, { rerender: true })];
+  if (item.kind === 'pair') {
+    out.push(fBi(ip + '.text', 'Sol taraf (etiket)'), fBi(ip + '.value', 'Sağ taraf (değer)'));
+  } else if (item.kind === 'button') {
+    out.push(fBi(ip + '.text', 'Düğme yazısı'),
+      fSelect(ip + '.target', 'Tıklayınca', [{ value: 'link', label: 'Bir linke git' }, ...targetOptions()], { rerender: true }));
+    if (!item.target || item.target === 'link') out.push(fText(ip + '.url', 'Link', { type: 'url', placeholder: 'https://', hint: 'Başka bir siteye giden linkler yeni sekmede açılır.' }));
+    out.push(fSelect(ip + '.style', 'Görünümü', [{ value: 'ghost', label: 'Çerçeveli' }, { value: 'solid', label: 'Dolu (vurgu renginde)' }]));
+  } else {
+    out.push(fBi(ip + '.text', item.kind === 'heading' ? 'Başlık' : 'Yazı', item.kind === 'heading' ? {} : { multiline: true, rows: 2, hint: 'Bir kelimeyi kalın yazmak için **iki yıldız** arasına al.' }));
+  }
+  return out;
+}
+const extraTitle = (it) => {
+  const kind = (EXTRA_KINDS.find((k) => k.value === it.kind) || { label: 'Satır' }).label;
+  const text = t(it.text, 'tr');
+  return text ? kind + ': ' + text : kind;
+};
+function extrasGroup(path, title, hint) {
+  return group(title, hint, listEditor({
+    path, itemTitle: extraTitle, fields: extraFields, empty: 'Henüz eklenmiş satır yok.',
+    adds: [{ label: 'Satır ekle', newItem: newExtra('text') }, { label: 'Düğme ekle', newItem: newExtra('button') }],
+  }));
+}
+const SECTION_EXTRAS_HINT = 'Bölümün en altına kendi satırlarını ve düğmelerini ekle. Türünü seçebilirsin: yazı, küçük açıklama, ara başlık, iki sütunlu satır ya da bir linke veya bölüme giden düğme. Sırasını oklarla değiştirirsin.';
+const sectionExtras = (p) => extrasGroup(p + '.extras', 'Ek satırlar ve düğmeler', SECTION_EXTRAS_HINT);
 
 /* ======================= labels ======================= */
 
@@ -483,9 +523,9 @@ const COLOR_LABELS = {
 const PRESET_NAMES = { amber: 'Kehribar', bone: 'Kemik', blood: 'Kan', ash: 'Kül', toxic: 'Zehir' };
 const STONE_NAMES = { natural: 'Doğal', honey: 'Bal', cherry: 'Kiraz', cognac: 'Konyak', lemon: 'Limon', green: 'Yeşil kehribar' };
 const STRING_LABELS = {
-  soundOff: 'Alt köşe: ses kapalıyken', nowPlaying: 'Alt köşe: ses açıkken', soundOn: 'Ses düğmesi: aç', soundMute: 'Ses düğmesi: kapat',
+  soundOff: 'Alt köşe: ses kapalıyken', nowPlaying: 'Alt köşe: ses açıkken / şarkı çalarken', paused: 'Alt köşe: şarkı duraklatılınca', recording: 'Alt köşe: kendi kaydın çalarken', player: 'Alt köşedeki çalan şarkı (sesli okuyucu)', soundOn: 'Ses düğmesi: aç', soundMute: 'Ses düğmesi: kapat',
   dragHint: 'Alttaki ipucu (bilgisayar)', scrollHint: 'Kaydır ipucu (telefon)', copy: 'Kopyala düğmesi', copied: 'Kopyalandı mesajı', selected: 'Seçildi mesajı', email: 'E-posta etiketi',
-  whatsapp: 'WhatsApp düğmesi', watch: 'Video izle etiketi', listen: 'Şarkı dinle etiketi (sesli okuyucu)', onSpotify: 'Spotify listesinin başlığı', openSpotify: 'Spotify oynatıcısının altındaki link', recordings: 'Kayıtlar listesinin başlığı', play: 'Çal düğmesi (sesli okuyucu)', pause: 'Duraklat düğmesi (sesli okuyucu)', seek: 'Şarkıda ilerleme çubuğu (sesli okuyucu)', close: 'Kapat', prev: 'Önceki', next: 'Sonraki',
+  whatsapp: 'WhatsApp düğmesi', watch: 'Video izle etiketi', listen: 'Şarkı dinle etiketi (sesli okuyucu)', onSpotify: 'Spotify listesinin başlığı', recordings: 'Kayıtlar listesinin başlığı', play: 'Çal düğmesi (sesli okuyucu)', pause: 'Duraklat düğmesi (sesli okuyucu)', seek: 'Şarkıda ilerleme çubuğu (sesli okuyucu)', close: 'Kapat', prev: 'Önceki', next: 'Sonraki',
   backToStart: 'Logo düğmesi (sesli okuyucu)', sections: 'Menü açıklaması (sesli okuyucu)', stoneLabel: 'Taş videosu açıklaması (sesli okuyucu)',
   language: 'Dil', switchTo: 'Dil düğmesi açıklaması', instagram: 'Instagram başlığı', dismiss: 'Duyuruyu kapat (sesli okuyucu)',
 };
@@ -692,6 +732,7 @@ function tabGate() {
   return [
     group('Giriş ekranı', 'Siteye girince ilk görünen ekran. Bu sekme açıkken önizlemede giriş ekranı görünür.',
       fBi('gate.tagline', 'Logonun altındaki satır'), fBi('gate.start', 'Ana düğme'), fBi('gate.note', 'Ses düğmesi: açıkken'), fBi('gate.noteOff', 'Ses düğmesi: kapalıyken', { hint: 'Ziyaretçi bu yazıya tıklayarak sesi açıp kapatır, sonra ana düğmeyle girer.' })),
+    extrasGroup('gate.extras', 'Logonun altına ek satırlar', 'Logonun altındaki satırın altına istediğin kadar satır ekle: yeteneklerin, kısa bir açıklama, bir düğme… “Küçük açıklama” türü daha küçük ve sade yazılır.'),
     group('Sağ üstteki düğme', 'Her ekranda sağ üstte duran düğme.', fBi('header.cta.label', 'Düğme yazısı'), fSelect('header.cta.target', 'Tıklayınca', targetOptions())),
   ];
 }
@@ -727,7 +768,8 @@ function tabAbout() {
   const p = 'sections.@about';
   return [hiddenNote('about'),
     group('Başlık ve yazı', null, fBi(p + '.title', 'Başlık'), fBi(p + '.body', 'Yazı', { multiline: true, rows: 7, hint: bodyHint })),
-    factsList(p + '.facts', 'Bilgi satırları', 'Yazının altında iki sütunlu satırlar (örneğin Enstrüman · Elektro gitar).')];
+    factsList(p + '.facts', 'Bilgi satırları', 'Yazının altında iki sütunlu satırlar (örneğin Enstrüman · Elektro gitar).'),
+    sectionExtras(p)];
 }
 
 function tabLessons() {
@@ -741,6 +783,7 @@ function tabLessons() {
       newItem: () => ({ name: bi(), price: bi(), details: bi() }), addLabel: 'Paket ekle', empty: 'Henüz paket yok.',
     })),
     group('Düğme', null, fBi(p + '.cta.label', 'Düğme yazısı'), fSelect(p + '.cta.target', 'Tıklayınca', targetOptions())),
+    sectionExtras(p),
   ];
 }
 
@@ -952,11 +995,12 @@ function tabWork() {
       path: p + '.videos', itemTitle: (it) => t(it.title, 'tr') || (youtubeId(it.url) ? 'Video' : 'Yeni video'),
       fields: videoFields, newItem: () => ({ url: '', title: bi() }), addLabel: 'Video ekle', empty: 'Henüz video yok.',
     })),
-    group('Kayıtlar', 'Kendi kayıtların: WAV, AIFF, FLAC ya da MP3 yükle. WAV dosyası senin tarayıcında 320 kbps MP3’e çevrilir; dinleyen kalite farkı duymaz, sitede de beklemeden çalar. WAV’ın bilgisayarında kalır, sadece MP3 yüklenir. Sitede Portfolyo’da, şarkının dalga formunu gösteren bir oynatıcıyla çıkar.', recordingsBox(p)),
-    group('Spotify şarkıları', 'Aranjesini, kaydını ya da bestesini yaptığın şarkılar. Spotify’da şarkının yanındaki üç nokta › Paylaş › Şarkı bağlantısını kopyala, buraya yapıştır; adı ve kapağı kendiliğinden gelir. Albüm ya da çalma listesi linki de olur. Sitede tıklayınca Spotify’ın oynatıcısı açılır.', listEditor({
+    group('Kayıtlar', 'Kendi kayıtların: WAV, AIFF, FLAC ya da MP3 yükle. WAV dosyası senin tarayıcında 320 kbps MP3’e çevrilir; dinleyen kalite farkı duymaz, sitede de beklemeden çalar. WAV’ın bilgisayarında kalır, sadece MP3 yüklenir. Sitede Portfolyo’da, şarkının dalga formunu gösteren bir oynatıcıyla çıkar; çalarken adı sol alt köşede görünür, oradan durdurulabilir.', recordingsBox(p)),
+    group('Spotify şarkıları', 'Aranjesini, kaydını ya da bestesini yaptığın şarkılar. Spotify’da şarkının yanındaki üç nokta › Paylaş › Şarkı bağlantısını kopyala, buraya yapıştır; adı ve kapağı kendiliğinden gelir. Albüm ya da çalma listesi linki de olur. Sitede tıklayınca sol alt köşede Spotify’ın küçük oynatıcısında çalar; ziyaretçi siteyi gezerken de çalmaya devam eder.', listEditor({
       path: p + '.tracks', itemTitle: (it) => t(it.title, 'tr') || (spotifyRef(it.url) ? 'Şarkı' : 'Yeni şarkı'),
       fields: trackFields, newItem: () => ({ url: '', title: bi(), artist: '', cover: '', roles: [] }), addLabel: 'Şarkı ekle', empty: 'Henüz şarkı yok.',
     })),
+    sectionExtras(p),
   ];
 }
 
@@ -993,6 +1037,7 @@ function tabGallery() {
       fText(ig + '.feedUrl', 'Otomatik akış adresi', { type: 'url', placeholder: 'https://feeds.behold.so/…', hint: 'behold.so’da oluşturduğun JSON akışın adresi. Son paylaşımların burada, sitenin tasarımında görünür ve günde bir yenilenir.' }),
       fRange(ig + '.count', 'Kaç paylaşım görünsün', { min: 3, max: 12, step: 3 }),
       fBi(ig + '.label', 'Takip düğmesi yazısı')),
+    sectionExtras(p),
   ];
 }
 
@@ -1011,6 +1056,7 @@ function tabContact() {
       fields: (ip) => [fText(ip + '.label', 'Adı', { placeholder: 'Instagram' }), fText(ip + '.url', 'Link', { type: 'url', placeholder: 'https://' })],
       newItem: () => ({ label: '', url: '' }), addLabel: 'Link ekle', empty: 'Henüz link yok.',
     })),
+    sectionExtras(p),
   ];
 }
 

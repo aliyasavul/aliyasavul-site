@@ -128,7 +128,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .font-sample { padding: 10px 12px; border: 1px dashed var(--line2); border-radius: 6px; font-size: 20px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* lists */
-.list { display: grid; gap: 10px; }
+/* a long title in a card shortens with … instead of widening the list past the column */
+.list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.adds { margin-top: 2px; }
 .card { border: 1px solid var(--line2); border-radius: 8px; background: var(--panel2); }
 .card-h { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--line); }
 .card-h b { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -6,6 +6,10 @@ Ali Yasavul'un kişisel sitesi: elektro gitar dersleri, session gitar, kayıt ve
 
 **aliyasavul.com/admin** adresine gir ve **GitHub ile giriş yap**. Bütün yazılar, renkler, yazı tipleri, YouTube videoları, kendi kayıtların (WAV yükleyebilirsin), Spotify şarkıları, fotoğraflar, Instagram, iletişim bilgileri ve duyuru bandı oradan değişir. Sağdaki önizlemede değişikliği anında görürsün; **Yayınla**'ya basınca site yaklaşık bir dakika içinde güncellenir.
 
+Her bölümün (ve giriş ekranının) sonunda **Satır ekle** ve **Düğme ekle** var: yazı, küçük açıklama, ara başlık, iki sütunlu satır ya da bir linke veya bölüme giden düğme ekleyebilirsin.
+
+Sitede bir kayıt ya da Spotify şarkısı çalınca sol alt köşede küçük bir oynatıcı açılır; ziyaretçi siteyi gezerken şarkı çalmaya devam eder.
+
 Her yayın bir sürüm olarak saklanır. Beğenmediğin bir değişikliği panelde **Geçmiş sürümler** bölümünden geri alabilirsin.
 
 Dosyalar en fazla 24 MB olabilir. Fotoğraflar yüklenirken otomatik küçültülür.

@@ -101,6 +101,8 @@ export const DEFAULTS = {
     start: bi('Başlamak için tıkla', 'Click to start'),
     note: bi('Ses açık', 'Sound on'),
     noteOff: bi('Ses kapalı', 'Sound off'),
+    // more lines under the one below the logo (see extrasHTML)
+    extras: [],
   },
   header: { cta: { label: bi('Ders al', 'Book a lesson'), target: 'lessons' } },
   banner: { enabled: false, text: bi('Kasım için 2 öğrenci yeri kaldı.', '2 student spots left for November.'), linkLabel: bi('Yer ayırt', 'Save a spot'), link: '' },
@@ -120,6 +122,7 @@ export const DEFAULTS = {
         { k: bi('Deneyim', 'Playing for'), v: bi('[X] yıl', '[X] years') },
         { k: bi('Tarzlar', 'Styles'), v: bi('[Tarzların]', '[Your styles]') },
       ],
+      extras: [],
     },
     {
       id: 'lessons', enabled: true, stamp: '34',
@@ -139,6 +142,7 @@ export const DEFAULTS = {
         { name: bi('4 derslik paket', '4-lesson pack'), price: bi('[Fiyat]', '[Price]'), details: bi('Haftada bir, 60 dakika', 'Once a week, 60 minutes') },
       ],
       cta: { label: bi('Ders ayarla', 'Book a lesson'), target: 'contact' },
+      extras: [],
     },
     {
       id: 'work', enabled: true, stamp: '56',
@@ -159,6 +163,7 @@ export const DEFAULTS = {
       recordings: [],
       // songs on Spotify Ali arranged, recorded, wrote or played on
       tracks: [],
+      extras: [],
     },
     {
       id: 'gallery', enabled: true, stamp: '66',
@@ -168,6 +173,7 @@ export const DEFAULTS = {
       body: bi('', ''),
       images: [],
       instagram: { enabled: false, profile: '', feedUrl: '', count: 6, label: bi("Instagram'da takip et", 'Follow on Instagram') },
+      extras: [],
     },
     {
       id: 'contact', enabled: true, stamp: '99 MA',
@@ -186,11 +192,15 @@ export const DEFAULTS = {
         { label: 'YouTube', url: '' },
         { label: 'Spotify', url: '' },
       ],
+      extras: [],
     },
   ],
   strings: {
     soundOff: bi('Ses kapalı', 'Sound off'),
     nowPlaying: bi('Çalıyor', 'Now playing'),
+    paused: bi('Duraklatıldı', 'Paused'),
+    recording: bi('Kayıt', 'Recording'),
+    player: bi('Çalan şarkı', 'Now playing'),
     soundOn: bi('Sesi aç', 'Sound on'),
     soundMute: bi('Sesi kapat', 'Sound off'),
     dragHint: bi('Kehribarı çevirmek için sürükle', 'Drag to turn the amber'),
@@ -286,6 +296,22 @@ export function withTheme(cfg, th) {
   return out;
 }
 
+// Rows Ali adds himself: on the start screen under the line below the logo, and at the end of
+// every section. A row is a line of text, a small note, a subheading, a two-column row (like the
+// facts) or a button that opens a link or goes to a section.
+export const EXTRA_KINDS = ['text', 'small', 'heading', 'pair', 'button'];
+const biOf = (v) => (isObj(v) ? { tr: typeof v.tr === 'string' ? v.tr : '', en: typeof v.en === 'string' ? v.en : '' } : typeof v === 'string' ? { tr: v, en: v } : { tr: '', en: '' });
+function cleanExtras(list) {
+  return (Array.isArray(list) ? list : []).filter((x) => isObj(x) && EXTRA_KINDS.includes(x.kind)).slice(0, 40).map((x) => ({
+    kind: x.kind,
+    text: biOf(x.text),
+    value: biOf(x.value),
+    url: typeof x.url === 'string' ? x.url.trim().slice(0, 500) : '',
+    target: typeof x.target === 'string' && /^[a-z]{1,20}$/.test(x.target) ? x.target : 'link',
+    style: x.style === 'solid' ? 'solid' : 'ghost',
+  }));
+}
+
 export function normalize(raw) {
   const src = isObj(raw) ? raw : {};
   const rest = { ...src };
@@ -314,6 +340,8 @@ export function normalize(raw) {
     theme: sanitizeTheme(merge(clone(out.theme), isObj(th.theme) ? th.theme : {})),
     banner: isObj(th.banner) ? merge(clone(DEFAULTS.banner), th.banner) : null,
   }));
+  out.gate.extras = cleanExtras(out.gate.extras);
+  for (const s of out.sections) s.extras = cleanExtras(s.extras);
   out.audio.volume = clampNum(out.audio.volume, 0, 100, 70);
   if (!['auto', 'tr', 'en'].includes(out.site.defaultLang)) out.site.defaultLang = 'auto';
   const lg = out.media.logo;
@@ -531,6 +559,51 @@ function actionHTML(cfg, cta, lang, cls) {
   return '<button type="button" class="' + cls + '" data-go="' + esc(dest.go) + '">' + esc(label) + '</button>';
 }
 
+// a button row: a link of its own, or one of the places the other buttons can go to
+function extraButton(cfg, x, lang, cls) {
+  const label = t(x.text, lang);
+  if (!label) return '';
+  const c = cls + (x.style === 'solid' ? '' : ' ghost');
+  if (x.target && x.target !== 'link') {
+    const dest = ctaHref(cfg, x.target, lang);
+    if (!dest) return '';
+    if (dest.href) return '<a class="' + c + '" href="' + esc(dest.href) + '" target="_blank" rel="noopener">' + esc(label) + '</a>';
+    return '<button type="button" class="' + c + '" data-go="' + esc(dest.go) + '">' + esc(label) + '</button>';
+  }
+  const u = safeUrl(x.url);
+  if (!u) return '';
+  return '<a class="' + c + '" href="' + esc(u) + '"' + (/^https?:/i.test(u) ? ' target="_blank" rel="noopener"' : '') + '>' + esc(label) + '</a>';
+}
+// the rows added in the panel; two-column rows that follow each other make one list, and buttons
+// one row of buttons
+export function extrasHTML(cfg, list, lang, { gate = false } = {}) {
+  let html = '', run = '', runKind = '';
+  const flush = () => {
+    if (run) html += runKind === 'pair' ? '<ul class="' + (gate ? 'gate-pairs' : 'facts x-facts') + '">' + run + '</ul>' : '<div class="' + (gate ? 'gate-btns' : 'actions x-actions') + '">' + run + '</div>';
+    run = ''; runKind = '';
+  };
+  for (const x of Array.isArray(list) ? list : []) {
+    const text = t(x.text, lang);
+    if (x.kind === 'pair' || x.kind === 'button') {
+      const item = x.kind === 'pair'
+        ? ((text || t(x.value, lang)) ? '<li><span class="k">' + esc(text) + '</span><span class="v">' + inline(t(x.value, lang)) + '</span></li>' : '')
+        : extraButton(cfg, x, lang, gate ? 'gate-btn' : 'btn x-btn');
+      if (!item) continue;
+      if (runKind !== x.kind) flush();
+      runKind = x.kind;
+      run += item;
+      continue;
+    }
+    flush();
+    if (!text) continue;
+    if (gate) html += '<p class="' + (x.kind === 'small' ? 'gate-note' : x.kind === 'heading' ? 'gate-head' : 'gate-sub') + '">' + (x.kind === 'heading' ? esc(text) : inline(text)) + '</p>';
+    else if (x.kind === 'heading') html += '<p class="sub-h x-h">' + esc(text) + '</p>';
+    else html += '<p class="' + (x.kind === 'small' ? 'x-small' : 'x-text') + '">' + inline(text) + '</p>';
+  }
+  flush();
+  return html;
+}
+
 function panelInner(cfg, s, lang) {
   const L = (v) => t(v, lang);
   const S = (k) => L(cfg.strings[k]);
@@ -631,6 +704,8 @@ function panelInner(cfg, s, lang) {
     }).join('');
     if (links) html += '<ul class="facts">' + links + '</ul>';
   }
+  const extras = extrasHTML(cfg, s.extras, lang);
+  if (extras) html += '<div class="x">' + extras + '</div>';
   return html;
 }
 
@@ -689,7 +764,7 @@ export function renderGate(cfg, lang) {
     '<button type="button" class="lang gate-lang" data-lang="' + other + '" lang="' + other + '" aria-label="' + esc(L(cfg.strings.switchTo)) + '">' + other.toUpperCase() + '</button>' +
     '<h1 id="gateTitle" class="sr-only">' + esc(cfg.site.name) + '</h1>' +
     '<span class="logo gate-logo" role="img" aria-label="' + esc(cfg.site.name) + '"></span>' +
-    '<p class="gate-sub">' + esc(L(cfg.gate.tagline)) + '</p>' +
+    '<div class="gate-lines"><p class="gate-sub">' + esc(L(cfg.gate.tagline)) + '</p>' + extrasHTML(cfg, cfg.gate.extras, lang, { gate: true }) + '</div>' +
     '<button type="button" class="gate-start" id="startBtn">' + esc(L(cfg.gate.start)) + '</button>' +
     '<button type="button" class="gate-sound" id="gateSound" aria-pressed="true" data-on="' + esc(L(cfg.gate.note)) + '" data-off="' + esc(L(cfg.gate.noteOff)) + '">' +
     '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="w1" d="M16.5 8.5a5 5 0 0 1 0 7"/><path class="w2" d="M19 6a8.5 8.5 0 0 1 0 12"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>' +

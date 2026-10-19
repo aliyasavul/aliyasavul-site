@@ -1,7 +1,7 @@
 // Runtime for the public site. The page arrives pre-rendered (scripts/build.mjs); this
 // module adds the camera, the glitch, sound, overlays and the TR/EN switch, and re-renders
 // from the same config when the language changes or the admin preview sends a draft.
-import { normalize, renderUI, renderGate, themeCSS, fontsHref, enabledSections, t, safeUrl, themeForDate, withTheme, mmss } from './render.js';
+import { normalize, renderUI, renderGate, themeCSS, fontsHref, enabledSections, t, safeUrl, themeForDate, withTheme, mmss, esc } from './render.js';
 import { createStone } from './stone.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -54,7 +54,7 @@ function renderAll() {
   if (banner && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
   syncSound();
   // a song that is playing carries on in the new language
-  recSync(); recShow();
+  recSync(); recShow(); dockSync();
   if (!enabledSections(cfg).some((s) => s.id === current)) current = 'intro';
   igLoaded = false;
   if (scrollMode) {
@@ -510,15 +510,24 @@ function syncSound() {
   btn.title = isOn ? S('soundMute') : S('soundOn');
   const sr = $('.sr-only', btn); if (sr) sr.textContent = btn.title;
   const k = $('#nowK', ui), v = $('#nowV', ui);
-  const song = recPlaying() ? recRow(rec.src) : null;
-  if (k) k.textContent = isOn || song ? S('nowPlaying') : S('soundOff');
-  if (v) v.textContent = song ? song.dataset.title : t(cfg.audio.title, lang);
+  if (k) k.textContent = isOn ? S('nowPlaying') : S('soundOff');
+  if (v) v.textContent = t(cfg.audio.title, lang);
 }
-function setSound(want) { if (want) recPause(); audio.set(want); syncSound(); wake(); }
+// the visitor's own choice: a song that is playing stops for the site's sound, and closing the
+// song's player no longer brings the sound back by itself
+function setSound(want) {
+  dock.resume = false;
+  if (want) { recPause(); spPause(); if (dock.kind === 'spotify' && !dock.sp) dockClose(); }
+  audio.set(want); syncSound(); wake();
+}
+// a song starts: the site's sound gives way, and comes back when the song's player is closed
+function songStarts() {
+  if (audio.on) { dock.resume = true; audio.set(false); syncSound(); }
+}
 
 /* ---------------- recordings: Ali's own songs, with their outline as the progress bar ---------------- */
 
-const rec = { el: null, src: '', raf: 0, seeking: null };
+const rec = { el: null, src: '', raf: 0, seeking: null, title: '', dur: 0 };
 const recPlaying = () => !!(rec.el && !rec.el.paused && !rec.el.ended);
 function recRow(src) { return src ? [...ui.querySelectorAll('.rec')].find((li) => li.dataset.src === src) || null : null; }
 function recElement() {
@@ -557,8 +566,9 @@ function recSync() {
     }
   }
   syncSound();
+  dockSync();
   if (playing && !rec.raf) {
-    const loop = () => { rec.raf = recPlaying() ? requestAnimationFrame(loop) : 0; recShow(); };
+    const loop = () => { rec.raf = recPlaying() ? requestAnimationFrame(loop) : 0; recShow(); dockProgress(); };
     rec.raf = requestAnimationFrame(loop);
   }
   wake();
@@ -571,8 +581,11 @@ function recPlay(li, at) {
     rec.src = li.dataset.src;
     node.src = rec.src;
   }
-  // the site's own sound gives way to the song
-  if (audio.on) { audio.set(false); syncSound(); }
+  rec.title = li.dataset.title || '';
+  rec.dur = Number(li.dataset.dur) || 0;
+  // the site's own sound gives way to the song, which shows in the corner wherever the visitor goes
+  songStarts();
+  dockRec();
   if (!audio.attach(node) && node.ayCtx) {
     // tied to an audio graph that has since been rebuilt: carry on with a fresh element
     const was = node.currentTime;
@@ -636,6 +649,175 @@ document.addEventListener('keydown', (e) => {
   e.stopPropagation();
   recSeek(li, clamp(to / dur, 0, 1), true);
 }, true);
+
+/* ---------------- the corner player: the song that is playing, wherever the visitor is ---------------- */
+// A recording or a song from Spotify plays on while the visitor moves around the site. The bottom
+// left corner shows what it is and has a pause button and a close button; a Spotify song plays in
+// Spotify's own small player there (through its iFrame API, so the site knows when it plays).
+const dock = { el: null, kind: '', resume: false, sp: null, spRef: '', spPlaying: false, spStarted: false, spToken: 0, api: null, apiFailed: false };
+const SP_API = 'https://open.spotify.com/embed/iframe-api/v1';
+function dockEl() {
+  if (!dock.el) {
+    dock.el = document.createElement('div');
+    dock.el.className = 'dock';
+    dock.el.hidden = true;
+    dock.el.setAttribute('role', 'region');
+    document.body.append(dock.el);
+  }
+  dock.el.setAttribute('aria-label', S('player'));
+  return dock.el;
+}
+const dockHead = () => '<div class="dk-h"><span class="dk-k"></span><button type="button" class="dk-x" aria-label="' + esc(S('close')) + '">' + ICON.close + '</button></div>';
+function dockShow(kind, body) {
+  const el = dockEl();
+  if (dock.kind !== kind) {
+    if (dock.kind === 'spotify') spClose();
+    el.innerHTML = dockHead() + body;
+    el.dataset.kind = kind;
+    dock.kind = kind;
+  }
+  el.hidden = false;
+  document.body.classList.add('docked');
+}
+function dockRec() {
+  if (dock.kind === 'rec') { dockSync(); return; }
+  dockShow('rec', '<div class="dk-rec"><button type="button" class="dk-play" aria-pressed="false"><span aria-hidden="true"></span></button>' +
+    '<div class="dk-m"><button type="button" class="dk-t" data-go="work"></button><span class="dk-bar" aria-hidden="true"><i></i></span></div><span class="dk-time"></span></div>');
+  dockSync();
+}
+// labels and state; also after the language changes
+function dockSync() {
+  const el = dock.el;
+  if (!el || !dock.kind) return;
+  dockEl();
+  const x = $('.dk-x', el);
+  if (x) x.setAttribute('aria-label', S('close'));
+  for (const b of ui.querySelectorAll('.trk')) b.classList.toggle('on', dock.kind === 'spotify' && b.dataset.sp === dock.spRef);
+  if (dock.kind === 'spotify') {
+    $('.dk-k', el).textContent = dock.spPlaying ? S('nowPlaying') + ' · Spotify' : 'Spotify';
+    return;
+  }
+  const playing = recPlaying();
+  const li = recRow(rec.src);
+  const title = (li && li.dataset.title) || rec.title;
+  $('.dk-k', el).textContent = (playing ? S('nowPlaying') : S('paused')) + ' · ' + S('recording');
+  const tb = $('.dk-t', el);
+  tb.textContent = title;
+  tb.title = title;
+  const pb = $('.dk-play', el);
+  pb.setAttribute('aria-pressed', playing ? 'true' : 'false');
+  pb.setAttribute('aria-label', (playing ? S('pause') : S('play')) + ': ' + title);
+  dockProgress();
+}
+function dockProgress() {
+  if (dock.kind !== 'rec' || !dock.el || !rec.el) return;
+  const dur = (isFinite(rec.el.duration) && rec.el.duration) || rec.dur || 0;
+  const cur = rec.el.currentTime || 0;
+  dock.el.style.setProperty('--p', dur ? Math.min(1, cur / dur).toFixed(4) : '0');
+  const tm = $('.dk-time', dock.el);
+  if (tm) tm.textContent = mmss(cur) + ' / ' + mmss(dur);
+}
+function dockToggle() {
+  if (dock.kind !== 'rec' || !rec.el) return;
+  if (recPlaying()) { rec.el.pause(); return; }
+  const li = recRow(rec.src);
+  if (li) { recPlay(li); return; }
+  songStarts();
+  const pr = rec.el.play();
+  if (pr && pr.catch) pr.catch(() => recSync());
+}
+function dockClose() {
+  if (dock.kind === 'rec') recPause();
+  if (dock.kind === 'spotify') spClose();
+  dock.kind = '';
+  dock.spRef = '';
+  if (dock.el) { dock.el.hidden = true; dock.el.innerHTML = ''; delete dock.el.dataset.kind; }
+  document.body.classList.remove('docked');
+  for (const b of ui.querySelectorAll('.trk.on')) b.classList.remove('on');
+  if (dock.resume) { dock.resume = false; audio.set(true); syncSound(); wake(); }
+}
+
+// Spotify: its player in the corner. The iFrame API lets the site start it and hear when it
+// plays or stops; if the API cannot load, the plain player is used and the visitor presses play.
+function spotifyApi() {
+  if (!dock.api) {
+    dock.api = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('spotify api timeout')), 8000);
+      window.onSpotifyIframeApiReady = (api) => { clearTimeout(timer); resolve(api); };
+      const sc = document.createElement('script');
+      sc.src = SP_API;
+      sc.async = true;
+      sc.onerror = () => { clearTimeout(timer); reject(new Error('spotify api')); };
+      document.body.append(sc);
+    });
+  }
+  return dock.api;
+}
+function dockSpotify(ref, title) {
+  const [kind, id] = String(ref || '').split('/');
+  if (!/^(track|album|playlist|episode|show|artist)$/.test(kind) || !/^[A-Za-z0-9]{22}$/.test(id || '')) return;
+  recPause();
+  songStarts();
+  dockShow('spotify', '<div class="dk-sp"></div>');
+  const same = dock.spRef === ref && dock.sp;
+  dock.spRef = ref;
+  dock.spTitle = title || 'Spotify';
+  dockSync();
+  if (same) { try { dock.sp.resume(); } catch (e) { /* the visitor can press play */ } return; }
+  const uri = 'spotify:' + kind + ':' + id;
+  const host = $('.dk-sp', dock.el);
+  const token = ++dock.spToken;
+  if (dock.sp) {
+    // the player is already there: load the new song into it and start it
+    try {
+      if (typeof dock.sp.loadEntity === 'function') dock.sp.loadEntity(uri); else dock.sp.loadUri(uri);
+      dock.sp.play();
+      return;
+    } catch (e) { spClose(); }
+  }
+  const plain = () => {
+    if (token !== dock.spToken || dock.kind !== 'spotify') return;
+    host.innerHTML = '<iframe src="https://open.spotify.com/embed/' + kind + '/' + id + '?utm_source=generator&theme=0" title="' + esc(dock.spTitle) + '" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>';
+    $('iframe', host).addEventListener('load', () => host.classList.add('ready'), { once: true });
+  };
+  if (dock.apiFailed) { plain(); return; }
+  spotifyApi().then((api) => {
+    if (token !== dock.spToken || dock.kind !== 'spotify') return;
+    host.innerHTML = '';
+    const spot = document.createElement('div');
+    host.append(spot);
+    api.createController(spot, { uri, url: 'https://open.spotify.com/' + kind + '/' + id + '?theme=0', width: '100%', height: 80 }, (ctrl) => {
+      if (token !== dock.spToken || dock.kind !== 'spotify') { try { ctrl.destroy(); } catch (e) { /* gone */ } return; }
+      dock.sp = ctrl;
+      dock.spStarted = false;
+      // the player fades in once it is up, so there is no white flash on the dark page
+      setTimeout(() => host.classList.add('ready'), 2500);
+      ctrl.addListener('ready', () => {
+        host.classList.add('ready');
+        const fr = $('iframe', host);
+        if (fr) fr.title = dock.spTitle;
+        if (dock.sp !== ctrl || dock.spStarted) return;
+        dock.spStarted = true;
+        try { ctrl.play(); } catch (e) { /* some browsers want a press on the player itself */ }
+      });
+      ctrl.addListener('playback_update', (ev) => {
+        if (dock.sp !== ctrl) return;
+        const d = (ev && ev.data) || {};
+        const playing = !d.isPaused;
+        // the song plays: a recording or the site's sound stops for it
+        if (playing && !dock.spPlaying) { recPause(); songStarts(); }
+        dock.spPlaying = playing;
+        dockSync();
+      });
+    });
+  }).catch(() => { dock.apiFailed = true; plain(); });
+}
+function spPause() { if (dock.sp && dock.spPlaying) { try { dock.sp.pause(); } catch (e) { /* gone */ } } }
+function spClose() {
+  dock.spToken++;
+  if (dock.sp) { try { dock.sp.destroy(); } catch (e) { /* gone */ } }
+  dock.sp = null; dock.spPlaying = false; dock.spStarted = false;
+}
 
 /* ---------------- logo: spectral glitch only where the pointer moves ---------------- */
 
@@ -855,26 +1037,11 @@ function closeOverlay() {
 }
 function openVideo(id, title) {
   recPause();
+  spPause();
   const src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&rel=0&playsinline=1';
   const wasOn = audio.on;
   if (wasOn) setSound(false);
   openOverlay('<div class="ov-frame"><iframe src="' + src + '" title="' + (title || 'YouTube').replace(/"/g, '&quot;') + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>', { kind: 'video', resume: wasOn });
-}
-// Spotify's own player; it only loads when a song is opened, and the site's sound waits meanwhile
-function openSpotify(ref, title) {
-  recPause();
-  const [kind, id] = String(ref || '').split('/');
-  if (!/^(track|album|playlist|episode|show|artist)$/.test(kind) || !/^[A-Za-z0-9]{22}$/.test(id || '')) return;
-  const wasOn = audio.on;
-  if (wasOn) setSound(false);
-  const src = 'https://open.spotify.com/embed/' + kind + '/' + id + '?utm_source=generator&theme=0';
-  const tall = kind !== 'track' && kind !== 'episode';
-  const link = 'https://open.spotify.com/' + kind + '/' + id;
-  openOverlay('<div class="ov-spw"><div class="ov-sp' + (tall ? ' tall' : '') + '"><iframe src="' + src + '" title="' + (title || 'Spotify').replace(/"/g, '&quot;') + '" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe></div>' +
-    '<a class="ov-sp-open" href="' + link + '" target="_blank" rel="noopener">' + S('openSpotify') + ' ↗</a></div>', { kind: 'spotify', resume: wasOn });
-  // the player fades in once it has loaded, so there is no white flash on the dark page
-  const fr = $('.ov-sp iframe', overlay);
-  if (fr) fr.addEventListener('load', () => fr.classList.add('ready'), { once: true });
 }
 function galleryImages() {
   const g = cfg.sections.find((s) => s.id === 'gallery');
@@ -981,10 +1148,18 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (el.dataset.lang) return setLang(el.dataset.lang);
-  if (el.dataset.go) { e.preventDefault(); return go(el.dataset.go); }
+  if (el.classList.contains('dk-x')) return dockClose();
+  if (el.classList.contains('dk-play')) return dockToggle();
+  if (el.dataset.go) {
+    e.preventDefault();
+    // a button on the start screen goes in first
+    const gate = $('#gate');
+    if (gate && !gate.classList.contains('gone') && gate.contains(el)) { const to = el.dataset.go; enter(wantSound); setTimeout(() => go(to), scrollMode ? 350 : 900); return; }
+    return go(el.dataset.go);
+  }
   if (el.classList.contains('rec-play')) return recToggle(el.closest('.rec'));
   if (el.dataset.yt) return openVideo(el.dataset.yt, el.dataset.title);
-  if (el.dataset.sp) return openSpotify(el.dataset.sp, el.dataset.title);
+  if (el.dataset.sp) return dockSpotify(el.dataset.sp, el.dataset.title);
   if (el.dataset.img !== undefined) return openPhoto(Number(el.dataset.img));
   if (el.dataset.copy) return copyText(el, el.dataset.copy);
 });
