@@ -1,20 +1,20 @@
 {
   "version": 1,
   "meta": {
-    "rev": "mveim0u5-g52pk0",
-    "updatedAt": "2026-10-19T00:27:29.597Z"
+    "rev": "mvfkdc4a-3cfq3p",
+    "updatedAt": "2026-10-19T18:04:29.722Z"
   },
   "site": {
     "name": "Ali Yasavul",
     "url": "https://aliyasavul.com",
     "defaultLang": "auto",
     "title": {
-      "tr": "Ali Yasavul | Elektro Gitarist · Gitar Dersi · Session",
-      "en": "Ali Yasavul | Electric Guitarist · Lessons · Session"
+      "tr": "Ali Yasavul | Elektro Gitarist · Gitar Dersi · Prodüksiyon",
+      "en": "Ali Yasavul | Electric Guitarist · Lessons · Production"
     },
     "description": {
-      "tr": "Ali Yasavul ile birebir elektro gitar dersleri, session gitaristlik, kayıt ve aranje.",
-      "en": "One-on-one electric guitar lessons, session guitar, recording and arrangement with Ali Yasavul."
+      "tr": "Ali Yasavul ile birebir elektro gitar dersleri, session gitaristlik, kayıt, aranje ve prodüksiyon.",
+      "en": "One-on-one electric guitar lessons, session guitar, recording, arrangement and production with Ali Yasavul."
     },
     "shareImage": "/assets/share.jpg"
   },
@@ -79,25 +79,9 @@
   },
   "gate": {
     "tagline": {
-      "tr": "Gitarist · Eğitmen · Session Müzisyeni",
-      "en": "Guitarist · Instructor · Session Musician"
+      "tr": "Gitarist · Eğitmen · Session Müzisyeni · Prodüktör",
+      "en": "Guitarist · Instructor · Session Musician · Producer"
     },
-    "extras": [
-      {
-        "kind": "small",
-        "text": {
-          "tr": "Gitar kayıtları, müzikal düzenlemeler ve birebir gitar dersleri",
-          "en": "Guitar recording, musical arrangements and private guitar lessons"
-        },
-        "value": {
-          "tr": "",
-          "en": ""
-        },
-        "url": "",
-        "target": "link",
-        "style": "ghost"
-      }
-    ],
     "start": {
       "tr": "Siteyi Keşfet",
       "en": "Click to start"
@@ -110,6 +94,22 @@
       "tr": "Ses kapalı",
       "en": "Sound off"
     },
+    "extras": [
+      {
+        "kind": "small",
+        "text": {
+          "tr": "Gitar kayıtları, müzikal düzenlemeler ve birebir gitar dersleri",
+          "en": "Guitar recording, musical arrangements and one on one guitar lessons"
+        },
+        "value": {
+          "tr": "",
+          "en": ""
+        },
+        "url": "",
+        "target": "link",
+        "style": "ghost"
+      }
+    ],
     "quiet": {
       "tr": "Sessiz gir",
       "en": "Enter without sound"
@@ -125,10 +125,10 @@
     }
   },
   "banner": {
-    "enabled": false,
+    "enabled": true,
     "text": {
-      "tr": "Kasım için 2 öğrenci yeri kaldı.",
-      "en": "2 student spots left for November."
+      "tr": "SINIRLI KONTEJAN: ARALIK AYINA KADAR TÜM HİZMETLERİMDE %10 İNDİRİM",
+      "en": "LIMITED AVAILABILITY: 10% DISCOUNT ON ALL MY SERVICES UNTIL DECEMBER"
     },
     "linkLabel": {
       "tr": "Yer ayırt",
@@ -138,35 +138,49 @@
   },
   "intro": {
     "nav": {
-      "tr": "Giriş",
-      "en": "Intro"
+      "tr": "Ana Sayfa",
+      "en": "Homepage"
     },
     "era": {
-      "tr": "Bugün",
-      "en": "Today"
+      "tr": "",
+      "en": ""
     },
-    "stamp": "0"
+    "stamp": "",
+    "stage": {
+      "tr": "EVRE 01",
+      "en": "PHASE 01"
+    }
+  },
+  "timeline": {
+    "stageSize": 10,
+    "nameSize": 50,
+    "subSize": 9,
+    "phoneTop": "stage"
   },
   "sections": [
     {
       "id": "about",
       "enabled": true,
-      "stamp": "23",
+      "stamp": "",
       "nav": {
         "tr": "Hakkımda",
         "en": "About"
       },
+      "stage": {
+        "tr": "EVRE 02",
+        "en": "PHASE 02"
+      },
       "era": {
-        "tr": "23 milyon yıl önce · Miyosen",
-        "en": "23 million years ago · Miocene"
+        "tr": "",
+        "en": ""
       },
       "title": {
         "tr": "Hakkımda",
         "en": "About"
       },
       "body": {
-        "tr": "[Kısa biyografin: kaç yıldır çaldığın, sevdiğin tarzlar ve birlikte çaldığın gruplar ya da sanatçılar.]",
-        "en": "[Your short bio: how long you have been playing, the styles you love, and the bands or artists you have played with.]"
+        "tr": "Merhaba, ben Ali.\nGitarist, aranjör ve eğitmenim. Rock ve modern metal ağırlıklı müzikal geçmişimle sahnede, stüdyoda ve farklı müzik projelerinde aktif olarak yer alıyorum. Şuan aktif olarak **Velev Ki** grubunda çalıyorum.\n\nGitar kayıtları, aranje ve müzikal düzenlemeler üzerine çalışıyorum. Bir şarkı üzerinde çalışırken benim için önemli olan yalnızca iyi bir performans ortaya koymak değil, parçanın karakterini anlayıp ona gerçekten katkı sağlayabilmek.\n\n8 yılı aşkın süredir elektro/akustik gitar eğitimi de veriyorum. Farklı yaş ve seviyelerden öğrencilerle çalışırken, herkesin müzikal yolculuğunun kendine özgü olduğuna inanıyorum. Derslerimi de bu yaklaşımla, öğrencinin hedeflerine ve ilgi alanlarına göre şekillendiriyorum.\n\nMüzik üretmek, yeni fikirler geliştirmek ve bunları başka müzisyenlerle paylaşmak yaptığım işin en sevdiğim tarafı.",
+        "en": "# Hi, I'm Ali.\n\nI'm a guitarist, arranger, and music educator. With a musical background rooted in rock and modern metal, I'm actively involved in live performances, studio work, and various music projects. I'm currently the guitarist for **Velev Ki**.\n\nI work on guitar recordings, arrangements, and musical production. When working on a song, my goal isn't just to deliver a great performance, but to understand its character and contribute something meaningful to the music.\n\nI've also been teaching electric and acoustic guitar for over 8 years, working with students of different ages and skill levels. I believe everyone's musical journey is unique, which is why I tailor my lessons to each student's individual goals and musical interests.\n\nWhat I enjoy most about being a musician is creating music, exploring new ideas, and sharing them with other musicians."
       },
       "facts": [
         {
@@ -175,8 +189,8 @@
             "en": "Instrument"
           },
           "v": {
-            "tr": "Elektro gitar",
-            "en": "Electric guitar"
+            "tr": "Elektro ve Akustik gitar",
+            "en": "Electric and Acoustic guitar"
           }
         },
         {
@@ -185,33 +199,38 @@
             "en": "Playing for"
           },
           "v": {
-            "tr": "[X] yıl",
-            "en": "[X] years"
+            "tr": "24 yıl",
+            "en": "24 years"
           }
         },
         {
           "k": {
             "tr": "Tarzlar",
-            "en": "Styles"
+            "en": "Genres"
           },
           "v": {
-            "tr": "[Tarzların]",
-            "en": "[Your styles]"
+            "tr": "Modern Metal, Rock, Fusion, Pop",
+            "en": "Modern Metal, Rock, Fusion, Pop"
           }
         }
-      ]
+      ],
+      "extras": []
     },
     {
       "id": "lessons",
       "enabled": true,
-      "stamp": "34",
+      "stamp": "",
       "nav": {
         "tr": "Dersler",
         "en": "Lessons"
       },
+      "stage": {
+        "tr": "EVRE 03",
+        "en": "PHASE 03"
+      },
       "era": {
-        "tr": "34 milyon yıl önce · Oligosen",
-        "en": "34 million years ago · Oligocene"
+        "tr": "",
+        "en": ""
       },
       "title": {
         "tr": "Gitar dersleri",
@@ -307,19 +326,24 @@
           "en": "Book a lesson"
         },
         "target": "contact"
-      }
+      },
+      "extras": []
     },
     {
       "id": "work",
       "enabled": true,
-      "stamp": "56",
+      "stamp": "",
       "nav": {
         "tr": "Portfolyo",
         "en": "Work"
       },
+      "stage": {
+        "tr": "EVRE 04",
+        "en": "PHASE 04"
+      },
       "era": {
-        "tr": "56 milyon yıl önce · Eosen",
-        "en": "56 million years ago · Eocene"
+        "tr": "",
+        "en": ""
       },
       "title": {
         "tr": "Portfolyo",
@@ -409,19 +433,24 @@
             "guitar"
           ]
         }
-      ]
+      ],
+      "extras": []
     },
     {
       "id": "gallery",
       "enabled": true,
-      "stamp": "66",
+      "stamp": "",
       "nav": {
         "tr": "Galeri",
         "en": "Gallery"
       },
+      "stage": {
+        "tr": "EVRE 05",
+        "en": "PHASE 05"
+      },
       "era": {
-        "tr": "66 milyon yıl önce · Kretase'nin sonu",
-        "en": "66 million years ago · End of the Cretaceous"
+        "tr": "",
+        "en": ""
       },
       "title": {
         "tr": "Galeri",
@@ -431,7 +460,32 @@
         "tr": "",
         "en": ""
       },
-      "images": [],
+      "images": [
+        {
+          "src": "/uploads/foto-dsc02404-44e62630.webp",
+          "thumb": "/uploads/foto-kucuk-dsc02404-d67dc325.webp",
+          "alt": {
+            "tr": "",
+            "en": ""
+          }
+        },
+        {
+          "src": "/uploads/foto-dsc05905-113c6952.webp",
+          "thumb": "/uploads/foto-kucuk-dsc05905-8345c3eb.webp",
+          "alt": {
+            "tr": "",
+            "en": ""
+          }
+        },
+        {
+          "src": "/uploads/foto-dsc02550-57614bfd.webp",
+          "thumb": "/uploads/foto-kucuk-dsc02550-c788bc4d.webp",
+          "alt": {
+            "tr": "",
+            "en": ""
+          }
+        }
+      ],
       "instagram": {
         "enabled": true,
         "profile": "http://instagram.com/aliyasavul95",
@@ -441,19 +495,24 @@
           "tr": "Instagram'da takip et",
           "en": "Follow on Instagram"
         }
-      }
+      },
+      "extras": []
     },
     {
       "id": "contact",
       "enabled": true,
-      "stamp": "99 MA",
+      "stamp": "",
       "nav": {
         "tr": "İletişim",
         "en": "Contact"
       },
+      "stage": {
+        "tr": "EVRE 06",
+        "en": "PHASE 06"
+      },
       "era": {
-        "tr": "99 milyon yıl önce · Kehribardaki dinozor kuyruğu",
-        "en": "99 million years ago · The dinosaur tail in amber"
+        "tr": "",
+        "en": ""
       },
       "title": {
         "tr": "İletişim",
@@ -491,7 +550,8 @@
           "label": "Spotify",
           "url": ""
         }
-      ]
+      ],
+      "extras": []
     }
   ],
   "strings": {
@@ -501,6 +561,22 @@
     },
     "nowPlaying": {
       "tr": "Çalıyor",
+      "en": "Now playing"
+    },
+    "paused": {
+      "tr": "Duraklatıldı",
+      "en": "Paused"
+    },
+    "loading": {
+      "tr": "Yükleniyor",
+      "en": "Loading"
+    },
+    "recording": {
+      "tr": "Kayıt",
+      "en": "Recording"
+    },
+    "player": {
+      "tr": "Çalan şarkı",
       "en": "Now playing"
     },
     "soundOn": {
