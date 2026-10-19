@@ -1,8 +1,8 @@
 {
   "version": 1,
   "meta": {
-    "rev": "mveewqi7-go2fvg",
-    "updatedAt": "2026-10-18T22:43:50.959Z"
+    "rev": "mveim0u5-g52pk0",
+    "updatedAt": "2026-10-19T00:27:29.597Z"
   },
   "site": {
     "name": "Ali Yasavul",
@@ -79,11 +79,11 @@
   },
   "gate": {
     "tagline": {
-      "tr": "Elektro gitar · Ders · Session · Kayıt · Aranje",
-      "en": "Electric guitar · Lessons · Session · Recording · Arrangement"
+      "tr": "Gitarist · Eğitmen · Session Müzisyeni Gitar kayıtları, müzikal düzenlemeler ve birebir gitar dersleri",
+      "en": "Guitarist · Instructor · Session Musician Guitar recording , musical arrangements and private guitar lessons"
     },
     "start": {
-      "tr": "Başlamak için tıkla",
+      "tr": "Siteyi Keşfet",
       "en": "Click to start"
     },
     "note": {
@@ -102,8 +102,8 @@
   "header": {
     "cta": {
       "label": {
-        "tr": "Ders al",
-        "en": "Book a lesson"
+        "tr": "Gitar Dersleri",
+        "en": "Guitar Lessons"
       },
       "target": "lessons"
     }
@@ -202,24 +202,24 @@
         "en": "Guitar lessons"
       },
       "body": {
-        "tr": "Birebir elektro gitar dersleri: teknik, teori, ton ve gerçekten çalmak istediğin şarkılar.",
-        "en": "One-on-one electric guitar lessons: technique, theory, tone and the songs you actually want to play."
+        "tr": "Birebir elektro ve akustik gitar dersleri: teknik, teori, ton ve gerçekten çalmak istediğin şarkılar.",
+        "en": "One-on-one electric and acoustic guitar lessons: technique, theory, tone and the songs you actually want to play."
       },
       "facts": [
         {
           "k": {
-            "tr": "Nerede",
-            "en": "Where"
+            "tr": "Nerede ?",
+            "en": "Where ?"
           },
           "v": {
-            "tr": "Online ya da yüz yüze, [şehrin]",
-            "en": "Online or in person, [your city]"
+            "tr": "Online ya da yüz yüze, İstanbul",
+            "en": "Online or in person, Istanbul"
           }
         },
         {
           "k": {
-            "tr": "Seviye",
-            "en": "Level"
+            "tr": "Seviye ★",
+            "en": "Level ★"
           },
           "v": {
             "tr": "Başlangıçtan ileri seviyeye",
@@ -234,12 +234,12 @@
             "en": "Single lesson"
           },
           "price": {
-            "tr": "[Fiyat]",
-            "en": "[Price]"
+            "tr": "2500 ₺",
+            "en": "2500 ₺"
           },
           "details": {
-            "tr": "60 dakika",
-            "en": "60 minutes"
+            "tr": "45-60 dakika",
+            "en": "45-60 minutes"
           }
         },
         {
@@ -248,12 +248,40 @@
             "en": "4-lesson pack"
           },
           "price": {
-            "tr": "[Fiyat]",
-            "en": "[Price]"
+            "tr": "8500 ₺",
+            "en": "8500 ₺"
           },
           "details": {
-            "tr": "Haftada bir, 60 dakika",
-            "en": "Once a week, 60 minutes"
+            "tr": "45-60 dakika",
+            "en": "45-60 minutes"
+          }
+        },
+        {
+          "name": {
+            "tr": "Tek ders",
+            "en": "Single lesson"
+          },
+          "price": {
+            "tr": "3200 ₺",
+            "en": "3200 ₺"
+          },
+          "details": {
+            "tr": "75-90 dakika",
+            "en": "75-90 minutes"
+          }
+        },
+        {
+          "name": {
+            "tr": "4 derslik paket",
+            "en": "4-lesson pack"
+          },
+          "price": {
+            "tr": "11000 ₺",
+            "en": "11000 ₺"
+          },
+          "details": {
+            "tr": "75-90 dakika",
+            "en": "75-90 minutes"
           }
         }
       ],
@@ -282,8 +310,8 @@
         "en": "Work"
       },
       "body": {
-        "tr": "Session gitar, kayıt ve aranje. Şarkın için doğru partisyonu birlikte bulalım.",
-        "en": "Session guitar, recording and arrangement. Let's find the right part for your song."
+        "tr": "Fikirlerini birlikte müziğe dönüştürelim.",
+        "en": "Let's turn your ideas into music together."
       },
       "services": [
         {
@@ -319,7 +347,53 @@
       ],
       "videos": [],
       "recordings": [],
-      "tracks": []
+      "tracks": [
+        {
+          "url": "https://open.spotify.com/album/0SLVGvj693UmRpK5G5s0nk",
+          "title": {
+            "tr": "Velev Ki",
+            "en": "Velev Ki"
+          },
+          "artist": "Velev Ki",
+          "cover": "https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e02b457981d60eed5452a4f7897",
+          "roles": [
+            "arrangement",
+            "recording",
+            "composition",
+            "guitar"
+          ]
+        },
+        {
+          "url": "https://open.spotify.com/album/6K0GrbeQUeGQ6bd1PZEksd",
+          "title": {
+            "tr": "Sinking Deeper",
+            "en": "Sinking Deeper"
+          },
+          "artist": "Velev Ki",
+          "cover": "https://image-cdn-ak.spotifycdn.com/image/ab67616d00001e023436364ba7c275e886397e81",
+          "roles": [
+            "arrangement",
+            "recording",
+            "composition",
+            "guitar"
+          ]
+        },
+        {
+          "url": "https://open.spotify.com/album/5Jb5Xy5ITDYeElPwN6qC3E",
+          "title": {
+            "tr": "Karanlık Bir Son",
+            "en": "Karanlık Bir Son"
+          },
+          "artist": "Bir'An",
+          "cover": "https://image-cdn-fa.spotifycdn.com/image/ab67616d00001e021843c658ade2624dff2605ce",
+          "roles": [
+            "arrangement",
+            "recording",
+            "composition",
+            "guitar"
+          ]
+        }
+      ]
     },
     {
       "id": "gallery",
