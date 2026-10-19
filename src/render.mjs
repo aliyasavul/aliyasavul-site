@@ -127,6 +127,22 @@ export const DEFAULTS = {
       extras: [],
     },
     {
+      id: 'production', enabled: true, stamp: '28',
+      nav: bi('Prodüksiyon', 'Production'), stage: bi('', ''),
+      era: bi('28 milyon yıl önce · Oligosen', '28 million years ago · Oligocene'),
+      title: bi('Kayıt, Aranje ve Prodüksiyon', 'Recording, Arrangement & Production'),
+      body: bi(
+        '[Kayıt, aranje ve prodüksiyon işlerin hakkında kısa bir yazı: neler yaptığın, nasıl çalıştığın.]',
+        '[A short text about your recording, arrangement and production work: what you do and how you work.]'
+      ),
+      facts: [
+        { k: bi('Kayıt', 'Recording'), v: bi('[Kısa açıklama]', '[Short description]') },
+        { k: bi('Aranje', 'Arrangement'), v: bi('[Kısa açıklama]', '[Short description]') },
+        { k: bi('Prodüksiyon', 'Production'), v: bi('[Kısa açıklama]', '[Short description]') },
+      ],
+      extras: [],
+    },
+    {
       id: 'lessons', enabled: true, stamp: '34',
       nav: bi('Dersler', 'Lessons'), stage: bi('', ''),
       era: bi('34 milyon yıl önce · Oligosen', '34 million years ago · Oligocene'),
@@ -329,7 +345,12 @@ export function normalize(raw) {
     seen.add(s.id);
     list.push(merge(clone(defaults.get(s.id)), s));
   }
-  for (const d of DEFAULTS.sections) if (!seen.has(d.id)) list.push(clone(d));
+  DEFAULTS.sections.forEach((d, k) => {
+    if (seen.has(d.id)) return;
+    const prev = k > 0 ? list.findIndex((x) => x.id === DEFAULTS.sections[k - 1].id) : -1;
+    list.splice(prev >= 0 ? prev + 1 : k === 0 ? 0 : list.length, 0, clone(d));
+    seen.add(d.id);
+  });
   out.sections = list;
 
   sanitizeTheme(out.theme);
@@ -623,7 +644,7 @@ function panelInner(cfg, s, lang) {
   const body = prose(L(s.body));
   if (body) html += '<div class="prose">' + body + '</div>';
 
-  if (s.id === 'about') {
+  if (s.id === 'about' || s.id === 'production') {
     html += factsHTML(s.facts, lang);
   }
 
@@ -673,14 +694,10 @@ function panelInner(cfg, s, lang) {
       if (!ref) return '';
       const title = L(tr.title);
       const roles = rolesText(tr.roles, L);
-      const cover = safeUrl(tr.cover);
-      const artist = typeof tr.artist === 'string' ? tr.artist.trim() : '';
-      return '<li><button type="button" class="trk" data-sp="' + ref.kind + '/' + ref.id + '" data-title="' + esc(title) + '" aria-label="' + esc(S('listen') + (title ? ': ' + title : '') + (artist ? ', ' + artist : '')) + '">' +
-        '<span class="trk-img">' + (cover ? '<img src="' + esc(cover) + '" alt="" loading="lazy" width="300" height="300">' : '') + '</span>' +
-        '<span class="trk-txt">' + '<span class="trk-t">' + esc(title || 'Spotify') + '</span>' + (artist ? '<span class="trk-a">' + esc(artist) + '</span>' : '') + (roles ? '<span class="trk-r">' + esc(roles) + '</span>' : '') + '</span>' +
-        '<span class="trk-play" aria-hidden="true"></span></button></li>';
+      return '<li class="spe"><iframe src="https://open.spotify.com/embed/' + ref.kind + '/' + ref.id + '?utm_source=generator&theme=0" title="' + esc(S('listen') + ': ' + (title || 'Spotify')) + '" loading="lazy" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>' +
+        (roles ? '<span class="trk-r">' + esc(roles) + '</span>' : '') + '</li>';
     }).join('');
-    if (tracks) html += '<div class="sp"><p class="sub-h">' + esc(S('onSpotify')) + '</p><ul class="tracks">' + tracks + '</ul></div>';
+    if (tracks) html += '<div class="sp"><p class="sub-h">' + esc(S('onSpotify')) + '</p><ul class="spes">' + tracks + '</ul></div>';
   }
 
   if (s.id === 'gallery') {
@@ -782,7 +799,7 @@ export function renderGate(cfg, lang) {
     '<button type="button" class="lang gate-lang" data-lang="' + other + '" lang="' + other + '" aria-label="' + esc(L(cfg.strings.switchTo)) + '">' + other.toUpperCase() + '</button>' +
     '<h1 id="gateTitle" class="sr-only">' + esc(cfg.site.name) + '</h1>' +
     '<span class="logo gate-logo" role="img" aria-label="' + esc(cfg.site.name) + '"></span>' +
-    '<div class="gate-lines"><p class="gate-sub">' + esc(L(cfg.gate.tagline)) + '</p>' + extrasHTML(cfg, cfg.gate.extras, lang, { gate: true }) + '</div>' +
+    '<div class="gate-lines"><p class="gate-sub">' + String(L(cfg.gate.tagline)).split(/\s+·\s+/).map((part) => esc(part).replace(/ /g, '&nbsp;')).join(' · ') + '</p>' + extrasHTML(cfg, cfg.gate.extras, lang, { gate: true }) + '</div>' +
     '<button type="button" class="gate-start" id="startBtn">' + esc(L(cfg.gate.start)) + '</button>' +
     '<button type="button" class="gate-sound" id="gateSound" aria-pressed="true" data-on="' + esc(L(cfg.gate.note)) + '" data-off="' + esc(L(cfg.gate.noteOff)) + '">' +
     '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="w1" d="M16.5 8.5a5 5 0 0 1 0 7"/><path class="w2" d="M19 6a8.5 8.5 0 0 1 0 12"/><path class="x" d="M16 9.5l5 5M21 9.5l-5 5"/></svg>' +

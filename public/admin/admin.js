@@ -440,6 +440,7 @@ function fileButton(text, accept, multiple, onFiles, iconName = 'img') {
 }
 
 // `adds` puts several add buttons under the list, each with its own kind of new item
+let newCardIn = '';
 function listEditor({ path, itemTitle, fields, newItem, addLabel, empty, off, adds }) {
   const arr = get(path) || [];
   const wrap = h('div', { class: 'list' });
@@ -462,7 +463,18 @@ function listEditor({ path, itemTitle, fields, newItem, addLabel, empty, off, ad
   });
   if (!arr.length && empty) wrap.append(h('p', { class: 'empty', text: empty }));
   if (newItem) wrap.append(h('button', { type: 'button', class: 'btn small add', onclick: () => { arr.push(newItem()); changed({ rerender: true }); } }, icon('plus'), addLabel));
-  if (adds) wrap.append(h('div', { class: 'row adds' }, adds.map((a) => h('button', { type: 'button', class: 'btn small add', onclick: () => { arr.push(a.newItem()); changed({ rerender: true }); } }, icon('plus'), a.label))));
+  if (adds) wrap.append(h('div', { class: 'row adds' }, adds.map((a) => h('button', { type: 'button', class: 'btn small add', onclick: () => { arr.push(a.newItem()); newCardIn = path; changed({ rerender: true }); } }, icon('plus'), a.label))));
+  if (newCardIn === path) {
+    newCardIn = '';
+    requestAnimationFrame(() => {
+      const cards = wrap.querySelectorAll('.card');
+      const c = cards[cards.length - 1];
+      if (!c) return;
+      c.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      const f = c.querySelector('.card-b input[type="text"], .card-b textarea');
+      if (f) { f.focus({ preventScroll: true }); if (f.select) f.select(); }
+    });
+  }
   return wrap;
 }
 
@@ -475,7 +487,9 @@ const EXTRA_KINDS = [
   { value: 'pair', label: 'İki sütunlu satır' },
   { value: 'button', label: 'Düğme' },
 ];
-const newExtra = (kind) => () => ({ kind, text: bi(), value: bi(), url: '', target: 'link', style: 'ghost' });
+const newExtra = (kind) => () => (kind === 'button'
+  ? { kind, text: bi('Yeni düğme', 'New button'), value: bi(), url: '', target: 'contact', style: 'ghost' }
+  : { kind, text: bi(), value: bi(), url: '', target: 'link', style: 'ghost' });
 function extraFields(ip, item) {
   const out = [fSelect(ip + '.kind', 'Türü', EXTRA_KINDS, { rerender: true })];
   if (item.kind === 'pair') {
@@ -529,13 +543,14 @@ const STRING_LABELS = {
   backToStart: 'Logo düğmesi (sesli okuyucu)', sections: 'Menü açıklaması (sesli okuyucu)', stoneLabel: 'Taş videosu açıklaması (sesli okuyucu)',
   language: 'Dil', switchTo: 'Dil düğmesi açıklaması', instagram: 'Instagram başlığı', dismiss: 'Duyuruyu kapat (sesli okuyucu)',
 };
-const SECTION_NAMES = { about: 'Hakkımda', lessons: 'Dersler', work: 'Portfolyo', gallery: 'Galeri', contact: 'İletişim' };
+const SECTION_NAMES = { about: 'Hakkımda', production: 'Kayıt, Aranje, Prodüksiyon', lessons: 'Dersler', work: 'Portfolyo', gallery: 'Galeri', contact: 'İletişim' };
 
 function targetOptions() {
   return [
     { value: 'lessons', label: 'Dersler bölümüne git' },
     { value: 'contact', label: 'İletişim bölümüne git' },
     { value: 'about', label: 'Hakkımda bölümüne git' },
+    { value: 'production', label: 'Kayıt, Aranje, Prodüksiyon bölümüne git' },
     { value: 'work', label: 'Portfolyo bölümüne git' },
     { value: 'gallery', label: 'Galeri bölümüne git' },
     { value: 'booking', label: 'Takvim (randevu) linkini aç' },
@@ -575,6 +590,7 @@ const RESETS = [
   },
   { id: 'timeline', label: 'Zaman çizelgesinin yazı boyutları', paths: ['timeline'] },
   { id: 'about', label: 'Hakkımda', hint: 'Başlık, yazı ve bilgi satırları örnek haline döner.', paths: contentPaths('about') },
+  { id: 'production', label: 'Kayıt, Aranje, Prodüksiyon', hint: 'Başlık, yazı ve bilgi satırları örnek haline döner.', paths: contentPaths('production') },
   { id: 'lessons', label: 'Dersler', hint: 'Paketler ve fiyatlar da örnek haline döner.', paths: contentPaths('lessons') },
   { id: 'work', label: 'Portfolyo', hint: 'Eklediğin YouTube videoları, kayıtlar ve Spotify şarkıları listeden çıkar.', paths: contentPaths('work') },
   { id: 'gallery', label: 'Galeri ve Instagram', hint: 'Eklediğin fotoğraflar listeden çıkar.', paths: contentPaths('gallery') },
@@ -694,7 +710,7 @@ function audioBox() {
   }), 'music');
   return h('div', { class: 'f' },
     h('span', { class: 'f-l', text: 'Çalan ses' }),
-    src ? h('audio', { controls: true, preload: 'none', src: previewSrc(src), style: 'width:100%' }) : h('p', { class: 'f-h', text: 'Şu an kendi riffin yok; alçak bir ambiyans sesi çalıyor.' }),
+    src ? h('audio', { controls: true, preload: 'none', src: previewSrc(src), style: 'width:100%' }) : h('p', { class: 'f-h', text: 'Şu an kendi riffin yok. Portfolyo’ya kayıt yüklediysen site onları karışık sırayla çalar; bu riff yalnızca hiç kayıt yokken çalar.' }),
     h('div', { class: 'row' }, btn, input, src ? h('button', { type: 'button', class: 'btn small danger', onclick: () => set('audio.src', '', { rerender: true }) }, 'Riffi kaldır') : null));
 }
 
@@ -796,6 +812,14 @@ function tabAbout() {
   return [hiddenNote('about'),
     group('Başlık ve yazı', null, fBi(p + '.title', 'Başlık'), fBi(p + '.body', 'Yazı', { multiline: true, rows: 7, hint: bodyHint })),
     factsList(p + '.facts', 'Bilgi satırları', 'Yazının altında iki sütunlu satırlar (örneğin Enstrüman · Elektro gitar).'),
+    sectionExtras(p)];
+}
+
+function tabProduction() {
+  const p = 'sections.@production';
+  return [hiddenNote('production'),
+    group('Başlık ve yazı', null, fBi(p + '.title', 'Başlık'), fBi(p + '.body', 'Yazı', { multiline: true, rows: 7, hint: bodyHint })),
+    factsList(p + '.facts', 'Bilgi satırları', 'Yazının altında iki sütunlu satırlar (örneğin Kayıt · Ev stüdyosunda gitar kaydı).'),
     sectionExtras(p)];
 }
 
@@ -1022,8 +1046,8 @@ function tabWork() {
       path: p + '.videos', itemTitle: (it) => t(it.title, 'tr') || (youtubeId(it.url) ? 'Video' : 'Yeni video'),
       fields: videoFields, newItem: () => ({ url: '', title: bi() }), addLabel: 'Video ekle', empty: 'Henüz video yok.',
     })),
-    group('Kayıtlar', 'Kendi kayıtların: WAV, AIFF, FLAC ya da MP3 yükle. WAV dosyası senin tarayıcında 320 kbps MP3’e çevrilir; dinleyen kalite farkı duymaz, sitede de beklemeden çalar. WAV’ın bilgisayarında kalır, sadece MP3 yüklenir. Sitede Portfolyo’da, şarkının dalga formunu gösteren bir oynatıcıyla çıkar; çalarken adı sol alt köşede görünür, oradan durdurulabilir.', recordingsBox(p)),
-    group('Spotify şarkıları', 'Aranjesini, kaydını ya da bestesini yaptığın şarkılar. Spotify’da şarkının yanındaki üç nokta › Paylaş › Şarkı bağlantısını kopyala, buraya yapıştır; adı ve kapağı kendiliğinden gelir. Albüm ya da çalma listesi linki de olur. Sitede tıklayınca sol alt köşede Spotify’ın küçük oynatıcısında çalar; ziyaretçi siteyi gezerken de çalmaya devam eder.', listEditor({
+    group('Kayıtlar', 'Kendi kayıtların: WAV, AIFF, FLAC ya da MP3 yükle. WAV dosyası senin tarayıcında 320 kbps MP3’e çevrilir; dinleyen kalite farkı duymaz, sitede de beklemeden çalar. WAV’ın bilgisayarında kalır, sadece MP3 yüklenir. Sitede Portfolyo’da, şarkının dalga formunu gösteren bir oynatıcıyla çıkar; kayıtların aynı zamanda sitenin müziği: ziyaretçi sesi açınca karışık sırayla çalar; sol altta adı, önceki/sonraki ve durdur tuşları görünür.', recordingsBox(p)),
+    group('Spotify şarkıları', 'Aranjesini, kaydını ya da bestesini yaptığın şarkılar. Spotify’da şarkının yanındaki üç nokta › Paylaş › Şarkı bağlantısını kopyala, buraya yapıştır; adı ve kapağı kendiliğinden gelir. Albüm ya da çalma listesi linki de olur. Sitede Spotify’ın kendi küçük oynatıcısı olarak görünür; ziyaretçi play’e basınca hemen çalar ve sitenin müziği durur.', listEditor({
       path: p + '.tracks', itemTitle: (it) => t(it.title, 'tr') || (spotifyRef(it.url) ? 'Şarkı' : 'Yeni şarkı'),
       fields: trackFields, newItem: () => ({ url: '', title: bi(), artist: '', cover: '', roles: [] }), addLabel: 'Şarkı ekle', empty: 'Henüz şarkı yok.',
     })),
@@ -1268,6 +1292,7 @@ const TABS = [
   { id: 'sections', group: 'İçerik', label: 'Menü ve bölümler', focus: null, render: tabSections },
   { id: 'timeline', group: 'İçerik', label: 'Zaman çizelgesi', focus: null, render: tabTimeline },
   { id: 'about', group: 'İçerik', label: 'Hakkımda', focus: 'about', render: tabAbout },
+  { id: 'production', group: 'İçerik', label: 'Kayıt, Aranje, Prodüksiyon', focus: 'production', render: tabProduction },
   { id: 'lessons', group: 'İçerik', label: 'Dersler', focus: 'lessons', render: tabLessons },
   { id: 'work', group: 'İçerik', label: 'Portfolyo, YouTube, Spotify', focus: 'work', render: tabWork },
   { id: 'gallery', group: 'İçerik', label: 'Galeri ve Instagram', focus: 'gallery', render: tabGallery },

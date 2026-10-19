@@ -51,7 +51,7 @@ function renderAll() {
   const gate = $('#gate');
   if (gate && !gate.classList.contains('gone')) { gateRoot.innerHTML = renderGate(cfg, lang); syncGateSound(); }
   const banner = $('.banner', ui);
-  if (banner && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
+  if (banner && !PREVIEW && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
   syncSound();
   // a song that is playing carries on in the new language
   recSync(); recShow();
@@ -376,7 +376,6 @@ function onScroll() {
   if (id !== current) {
     current = id;
     if (id === 'gallery') loadInstagram();
-    if (id === 'work') spPreload();
     clearTimeout(hashTimer);
     hashTimer = setTimeout(() => setHash(current), 400);
   }
@@ -435,6 +434,8 @@ window.addEventListener('pointercancel', endDrag);
 
 /* ---------------- sound: the riff if one is uploaded, otherwise a low drone ---------------- */
 
+// the low drone the site played when no sound was uploaded: switched off for now (kept for later)
+const DRONE = false;
 const audio = (() => {
   let ctx = null, master = null, an = null, buf = null, on = false, lvl = 0, el = null, builtFor = null;
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -453,7 +454,7 @@ const audio = (() => {
       el = new Audio();
       el.loop = true; el.preload = 'auto'; el.src = src;
       ctx.createMediaElementSource(el).connect(master);
-    } else {
+    } else if (DRONE) {
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380; lp.Q.value = 0.8;
       [[41.2, 0.5], [61.74, 0.3], [82.6, 0.2]].forEach(([f, g]) => {
         const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
@@ -473,6 +474,7 @@ const audio = (() => {
   return {
     set(want) {
       const src = safeUrl(cfg.audio.src, { allowBlob: true });
+      if (want && !src && !DRONE) want = false;
       if (ctx && builtFor !== src) teardown();
       if (want && !ctx && !build()) return false;
       if (!ctx) return false;
@@ -516,38 +518,41 @@ const audio = (() => {
 })();
 
 function syncSound() {
+  const list = musicList();
+  const songs = list.length > 0;
+  document.body.classList.toggle('mute-site', !hasMusic());
+  document.body.classList.toggle('song', songs);
   const btn = $('#soundBtn', ui);
   if (!btn) return;
-  const isOn = audio.on;
+  const isOn = recPlaying() || audio.on;
   btn.setAttribute('aria-pressed', isOn ? 'true' : 'false');
   btn.title = isOn ? S('soundMute') : S('soundOn');
   const sr = $('.sr-only', btn); if (sr) sr.textContent = btn.title;
   const k = $('#nowK', ui), v = $('#nowV', ui), np = $('.np', ui);
-  const on = !!song.kind;
-  document.body.classList.toggle('song', on);
-  if (np) np.hidden = !on;
-  if (on) {
-    const playing = songPlaying();
-    const state = playing ? S('nowPlaying') : song.kind === 'spotify' && song.want ? S('loading') : S('paused');
-    if (k) k.textContent = state + ' · ' + (song.kind === 'spotify' ? 'Spotify' : S('recording'));
-    if (v) v.textContent = song.title;
+  if (np) np.hidden = !songs;
+  if (songs) {
+    const cur = list.find((x) => x.src === rec.src) || musicNext();
+    const playing = recPlaying();
+    if (k) k.textContent = playing ? S('nowPlaying') : rec.src ? S('paused') : S('soundOff');
+    if (v) v.textContent = cur ? cur.title : '';
     const pb = $('.np-play', ui);
-    if (pb) { pb.setAttribute('aria-pressed', playing ? 'true' : 'false'); pb.setAttribute('aria-label', (playing ? S('pause') : S('play')) + ': ' + song.title); }
-    const many = songItems().length > 1;
-    for (const b of ui.querySelectorAll('.np-prev, .np-next')) b.disabled = !many;
+    if (pb) { pb.setAttribute('aria-pressed', playing ? 'true' : 'false'); pb.setAttribute('aria-label', (playing ? S('pause') : S('play')) + (cur ? ': ' + cur.title : '')); }
+    for (const b of ui.querySelectorAll('.np-prev, .np-next')) b.disabled = list.length < 2;
   } else {
     if (k) k.textContent = isOn ? S('nowPlaying') : S('soundOff');
     if (v) v.textContent = t(cfg.audio.title, lang);
   }
-  for (const b of ui.querySelectorAll('.trk')) b.classList.toggle('on', song.kind === 'spotify' && song.key === 'sp:' + b.dataset.sp);
 }
-// the visitor turns the site's sound on: the song stops and the corner shows the sound again
+// the sound buttons: the recordings in their shuffled order, or (with none) the uploaded loop
 function setSound(want) {
-  if (want) { recPause(); spPause(); if (song.kind === 'spotify' && !song.sp) spClose(); song.kind = ''; song.key = ''; spShow(false); }
-  audio.set(want); syncSound(); wake();
+  if (musicList().length) {
+    if (want) musicPlay(0); else recPause();
+  } else {
+    if (want) spStop();
+    audio.set(want);
+  }
+  syncSound(); wake();
 }
-// a song starts: the site's own sound gives way to it
-function quietForSong() { if (audio.on) audio.set(false); }
 
 /* ---------------- recordings: Ali's own songs, with their outline as the progress bar ---------------- */
 
@@ -560,7 +565,7 @@ function recElement() {
     node.preload = 'none';
     node.addEventListener('play', recSync);
     node.addEventListener('pause', recSync);
-    node.addEventListener('ended', () => { recSync(); recShow(0); if (song.kind === 'rec' && songItems().length > 1) songStep(1); });
+    node.addEventListener('ended', () => { recSync(); recShow(0); if (musicList().length > 1) musicPlay(1); });
     node.addEventListener('error', recSync);
     rec.el = node;
   }
@@ -596,21 +601,20 @@ function recSync() {
   }
   wake();
 }
-function recPlay(li, at) {
+function recPlay(li, at) { recPlayItem({ src: li.dataset.src, title: li.dataset.title, dur: li.dataset.dur }, at); }
+function recPlayItem(tr, at) {
   let node = recElement();
-  if (rec.src !== li.dataset.src) {
+  if (rec.src !== tr.src) {
     const old = recRow(rec.src);
     if (old) { old.style.setProperty('--p', '0'); const n0 = $('.rec-now', old); if (n0) n0.textContent = ''; }
-    rec.src = li.dataset.src;
+    rec.src = tr.src;
     node.src = rec.src;
   }
-  rec.title = li.dataset.title || '';
-  rec.dur = Number(li.dataset.dur) || 0;
-  // the song shows in the corner wherever the visitor goes; Spotify and the site's sound give way
-  spPause();
-  quietForSong();
-  song.kind = 'rec'; song.key = 'rec:' + rec.src; song.title = rec.title; song.want = false;
-  spShow(false);
+  rec.title = tr.title || '';
+  rec.dur = Number(tr.dur) || 0;
+  // a Spotify player or the uploaded loop gives way to the song
+  spStop();
+  if (audio.on) audio.set(false);
   if (!audio.attach(node) && node.ayCtx) {
     // tied to an audio graph that has since been rebuilt: carry on with a fresh element
     const was = node.currentTime;
@@ -675,143 +679,61 @@ document.addEventListener('keydown', (e) => {
   recSeek(li, clamp(to / dur, 0, 1), true);
 }, true);
 
-/* ---------------- songs: the bottom-left corner plays them ---------------- */
-// While a song is chosen, the corner that names the site's sound shows it instead, with play and
-// pause and the previous and next song of the portfolio (the recordings, then the Spotify songs).
-// Spotify plays in its own player, kept out of sight and driven through its iFrame API. It is made
-// when the visitor reaches the portfolio, so a song starts at once. Only if the browser will not
-// let it start by itself does that player show above the corner, for the visitor to press play.
-const song = { kind: '', key: '', title: '', want: false, sp: null, spRef: '', spPlaying: false, spToken: 0, api: null, apiFailed: false, host: null, timer: 0 };
-const SP_API = 'https://open.spotify.com/embed/iframe-api/v1';
-const songItems = () => [...ui.querySelectorAll('#p-work .rec, #p-work .trk')];
-const songKey = (el) => (el.classList.contains('rec') ? 'rec:' + el.dataset.src : 'sp:' + el.dataset.sp);
-const songPlaying = () => (song.kind === 'rec' ? recPlaying() : song.kind === 'spotify' && song.spPlaying);
-function songStep(d) {
-  const items = songItems();
-  if (!items.length) return;
-  const i = items.findIndex((el) => songKey(el) === song.key);
-  const el = items[i < 0 ? 0 : (i + d + items.length) % items.length];
-  if (el.classList.contains('rec')) recPlay(el); else spPlay(el.dataset.sp, el.dataset.title);
-}
-function songToggle() {
-  if (song.kind === 'rec') {
-    if (recPlaying()) { rec.el.pause(); return; }
-    const li = recRow(rec.src);
-    if (li) recPlay(li);
-  } else if (song.kind === 'spotify') {
-    if (song.spPlaying) spPause();
-    else { const [kind, id] = song.spRef.split('/'); if (song.sp) { song.want = true; spWatch(); try { song.sp.resume(); } catch (e) { /* press play in its player */ } } else if (kind) spPlay(song.spRef, song.title); }
+/* ---------------- music: the site plays Ali's own recordings, shuffled ---------------- */
+// The sound buttons (on the start screen and bottom right) play his uploaded recordings one after
+// another, in an order shuffled on every visit. While there are recordings, the bottom-left corner
+// shows the song with play/pause and the previous and next song. With none, an uploaded loop (the
+// sound settings in the panel) plays instead.
+const music = { order: [], pos: -1, key: '' };
+function tracksOf() {
+  const w = cfg.sections.find((x) => x.id === 'work');
+  const out = [];
+  for (const r of (w && w.recordings) || []) {
+    const src = safeUrl(r && r.src, { allowBlob: true });
+    if (!src || !(/^\/uploads\/[a-z0-9-]+\.(mp3|m4a)$/i.test(src) || /^blob:/.test(src))) continue;
+    out.push({ src, title: t(r.title, lang) || S('recordings'), dur: Math.max(0, Math.round(Number(r.duration) || 0)) });
   }
-  syncSound();
+  return out;
 }
+const hasMusic = () => tracksOf().length > 0 || !!safeUrl(cfg.audio.src, { allowBlob: true }) || DRONE;
+function musicList() {
+  const list = tracksOf();
+  const key = list.map((x) => x.src).join('|');
+  if (key !== music.key) {
+    music.key = key;
+    music.order = list.map((_, i) => i);
+    for (let i = music.order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [music.order[i], music.order[j]] = [music.order[j], music.order[i]]; }
+    music.pos = -1;
+  }
+  return list;
+}
+// step 0: the current song (the first of the shuffle if none has played); 1 or -1: the next or previous
+function musicPlay(step) {
+  const list = musicList();
+  if (!list.length) return false;
+  const cur = list.findIndex((x) => x.src === rec.src);
+  if (cur >= 0) music.pos = music.order.indexOf(cur);
+  music.pos = music.pos < 0 ? 0 : (music.pos + step + list.length) % list.length;
+  recPlayItem(list[music.order[music.pos]]);
+  return true;
+}
+function musicNext() { const list = musicList(); return list.length ? list[music.order[Math.max(0, music.pos)]] : null; }
 
-function spHost() {
-  if (!song.host) {
-    song.host = document.createElement('div');
-    song.host.className = 'sp-host';
-    document.body.append(song.host);
+// Spotify's own players in the portfolio: pressing one stops the site's music, and the site's music
+// starting again stops that player (it is reloaded)
+let spLast = null;
+window.addEventListener('blur', () => setTimeout(() => {
+  const a = document.activeElement;
+  if (a && a.tagName === 'IFRAME' && /^https:\/\/open\.spotify\.com\//.test(a.getAttribute('src') || '')) {
+    spLast = a;
+    recPause();
+    if (audio.on) audio.set(false);
+    syncSound();
   }
-  return song.host;
-}
-function spShow(on) { if (song.host) song.host.classList.toggle('show', !!on); }
-// a few seconds without the song starting: the browser wants a press on Spotify's own player
-function spWatch() {
-  clearTimeout(song.timer);
-  song.timer = setTimeout(() => { if (song.kind === 'spotify' && song.want && !song.spPlaying) { spShow(true); song.want = false; syncSound(); } }, 3500);
-}
-function spotifyApi() {
-  if (!song.api) {
-    song.api = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('spotify api timeout')), 8000);
-      window.onSpotifyIframeApiReady = (api) => { clearTimeout(timer); resolve(api); };
-      const sc = document.createElement('script');
-      sc.src = SP_API;
-      sc.async = true;
-      sc.onerror = () => { clearTimeout(timer); reject(new Error('spotify api')); };
-      document.body.append(sc);
-    });
-  }
-  return song.api;
-}
-const spValid = (kind, id) => /^(track|album|playlist|episode|show|artist)$/.test(kind || '') && /^[A-Za-z0-9]{22}$/.test(id || '');
-// Spotify's player, made for `ref` (kind/id); `start` plays it as soon as it is up
-function spMake(ref, start) {
-  const [kind, id] = ref.split('/');
-  const host = spHost();
-  const token = ++song.spToken;
-  song.spRef = ref;
-  const plain = () => {
-    if (token !== song.spToken) return;
-    host.innerHTML = '<iframe src="https://open.spotify.com/embed/' + kind + '/' + id + '?utm_source=generator&theme=0" title="Spotify" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>';
-    // the plain player cannot be started from the site: it shows so the visitor can press play
-    if (start) { spShow(true); song.want = false; syncSound(); }
-  };
-  if (song.apiFailed) { plain(); return; }
-  spotifyApi().then((api) => {
-    if (token !== song.spToken) return;
-    host.innerHTML = '';
-    const el = document.createElement('div');
-    host.append(el);
-    api.createController(el, { uri: 'spotify:' + kind + ':' + id, url: 'https://open.spotify.com/' + kind + '/' + id + '?theme=0', width: '100%', height: 80 }, (ctrl) => {
-      if (token !== song.spToken) { try { ctrl.destroy(); } catch (e) { /* gone */ } return; }
-      song.sp = ctrl;
-      ctrl.addListener('ready', () => {
-        if (song.sp === ctrl && start && song.want && song.spRef === ref) { try { ctrl.play(); } catch (e) { /* see spWatch */ } }
-      });
-      ctrl.addListener('playback_update', (ev) => {
-        if (song.sp !== ctrl) return;
-        const playing = !((ev && ev.data) || {}).isPaused;
-        if (playing && !song.spPlaying) {
-          // the song plays: the corner names it, and a recording or the site's sound stops for it
-          spShow(false);
-          song.want = false;
-          recPause();
-          quietForSong();
-          if (song.kind !== 'spotify' || song.key !== 'sp:' + song.spRef) {
-            const b = [...ui.querySelectorAll('.trk')].find((x) => x.dataset.sp === song.spRef);
-            song.kind = 'spotify'; song.key = 'sp:' + song.spRef; song.title = (b && b.dataset.title) || 'Spotify';
-          }
-        }
-        song.spPlaying = playing;
-        syncSound();
-      });
-    });
-  }).catch(() => { song.apiFailed = true; plain(); });
-}
-function spPlay(ref, title) {
-  const [kind, id] = String(ref || '').split('/');
-  if (!spValid(kind, id)) return;
-  // the same song, already playing: the button pauses it
-  if (song.kind === 'spotify' && song.key === 'sp:' + ref && song.spPlaying) { spPause(); return; }
-  recPause();
-  quietForSong();
-  song.kind = 'spotify'; song.key = 'sp:' + ref; song.title = title || 'Spotify'; song.want = true;
-  spShow(false);
-  spWatch();
-  syncSound();
-  if (song.sp && song.spRef === ref) { try { song.sp.resume(); } catch (e) { /* see spWatch */ } return; }
-  if (song.sp) {
-    try {
-      song.spRef = ref;
-      if (typeof song.sp.loadEntity === 'function') song.sp.loadEntity('spotify:' + kind + ':' + id); else song.sp.loadUri('spotify:' + kind + ':' + id);
-      song.sp.play();
-      return;
-    } catch (e) { spClose(); }
-  }
-  spMake(ref, true);
-}
-// made ahead when the visitor reaches the portfolio, so the first song starts without waiting
-function spPreload() {
-  if (song.sp || song.spToken) return;
-  const b = ui.querySelector('#p-work .trk');
-  if (b && /\//.test(b.dataset.sp || '')) spMake(b.dataset.sp, false);
-}
-function spPause() { if (song.sp && song.spPlaying) { try { song.sp.pause(); } catch (e) { /* gone */ } } }
-function spClose() {
-  song.spToken++;
-  if (song.sp) { try { song.sp.destroy(); } catch (e) { /* gone */ } }
-  if (song.host) { song.host.innerHTML = ''; spShow(false); }
-  song.sp = null; song.spRef = ''; song.spPlaying = false;
+}, 0));
+function spStop() {
+  if (spLast && document.contains(spLast)) { const src = spLast.getAttribute('src'); spLast.setAttribute('src', src); }
+  spLast = null;
 }
 
 /* ---------------- logo: spectral glitch only where the pointer moves ---------------- */
@@ -1032,7 +954,6 @@ function closeOverlay() {
 }
 function openVideo(id, title) {
   recPause();
-  spPause();
   const src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&rel=0&playsinline=1';
   const wasOn = audio.on;
   if (wasOn) setSound(false);
@@ -1139,13 +1060,13 @@ document.addEventListener('click', (e) => {
   if (el.classList.contains('ov-next')) return stepPhoto(1);
   if (el.classList.contains('banner-x')) {
     const b = el.closest('.banner');
-    if (b) { b.classList.add('gone'); store.set('ay-banner-x', b.dataset.key); }
+    if (b) { b.classList.add('gone'); if (!PREVIEW) store.set('ay-banner-x', b.dataset.key); }
     return;
   }
   if (el.dataset.lang) return setLang(el.dataset.lang);
-  if (el.classList.contains('np-play')) return songToggle();
-  if (el.classList.contains('np-prev')) return songStep(-1);
-  if (el.classList.contains('np-next')) return songStep(1);
+  if (el.classList.contains('np-play')) return setSound(!recPlaying());
+  if (el.classList.contains('np-prev')) { musicPlay(-1); return; }
+  if (el.classList.contains('np-next')) { musicPlay(1); return; }
   if (el.dataset.go) {
     e.preventDefault();
     // a button on the start screen goes in first
@@ -1155,7 +1076,6 @@ document.addEventListener('click', (e) => {
   }
   if (el.classList.contains('rec-play')) return recToggle(el.closest('.rec'));
   if (el.dataset.yt) return openVideo(el.dataset.yt, el.dataset.title);
-  if (el.dataset.sp) return spPlay(el.dataset.sp, el.dataset.title);
   if (el.dataset.img !== undefined) return openPhoto(Number(el.dataset.img));
   if (el.dataset.copy) return copyText(el, el.dataset.copy);
 });
@@ -1217,9 +1137,10 @@ if (cfg.activeTheme) applyTheme();
 if (lang !== document.documentElement.lang || cfg.activeTheme) renderAll();
 else {
   const banner = $('.banner', ui);
-  if (banner && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
+  if (banner && !PREVIEW && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
   applyMode();
 }
+syncSound();
 wake();
 
 if (PREVIEW) {

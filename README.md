@@ -8,7 +8,7 @@ Ali Yasavul'un kişisel sitesi: elektro gitar dersleri, session gitar, kayıt ve
 
 Her bölümün (ve giriş ekranının) sonunda **Satır ekle** ve **Düğme ekle** var: yazı, küçük açıklama, ara başlık, iki sütunlu satır ya da bir linke veya bölüme giden düğme ekleyebilirsin.
 
-Sitede bir kayıt ya da Spotify şarkısı çalınca sol alt köşede küçük bir oynatıcı açılır; ziyaretçi siteyi gezerken şarkı çalmaya devam eder.
+Portfolyo'ya yüklediğin kayıtlar sitenin müziğidir: ziyaretçi sesi açınca karışık sırayla çalar, sol altta şarkının adı ve önceki / durdur / sonraki tuşları görünür. Spotify şarkıları Spotify'ın kendi küçük oynatıcısıyla çıkar; play'e basınca hemen çalar ve sitenin müziği durur.
 
 Her yayın bir sürüm olarak saklanır. Beğenmediğin bir değişikliği panelde **Geçmiş sürümler** bölümünden geri alabilirsin.
 
