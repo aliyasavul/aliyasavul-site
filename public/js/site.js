@@ -8,6 +8,11 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const PREVIEW = new URLSearchParams(location.search).has('preview') && window.parent !== window;
 
+// the announcement's × lasts until the browser is closed, so a returning visitor sees it again
+const sess = {
+  get(k) { try { return window.sessionStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { window.sessionStorage.setItem(k, v); } catch (e) { /* private mode */ } },
+};
 const store = {
   get(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { window.localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
@@ -51,8 +56,9 @@ function renderAll() {
   const gate = $('#gate');
   if (gate && !gate.classList.contains('gone')) { gateRoot.innerHTML = renderGate(cfg, lang); syncGateSound(); }
   const banner = $('.banner', ui);
-  if (banner && !PREVIEW && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
+  if (banner && !PREVIEW && sess.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
   syncSound();
+  drawCals();
   // a song that is playing carries on in the new language
   recSync(); recShow();
   if (!enabledSections(cfg).some((s) => s.id === current)) current = 'intro';
@@ -736,6 +742,30 @@ function spStop() {
   spLast = null;
 }
 
+/* ---------------- availability calendar: this month (and the next), booked days filled ---------------- */
+let calOffset = 0;
+function drawCals() {
+  const loc = lang === 'tr' ? 'tr-TR' : 'en-GB';
+  const now = new Date();
+  const today = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  for (const box of ui.querySelectorAll('.cal')) {
+    const busy = new Set((box.dataset.busy || '').split(',').filter(Boolean));
+    const first = new Date(now.getFullYear(), now.getMonth() + calOffset, 1);
+    const y = first.getFullYear(), mo = first.getMonth();
+    const days = new Date(y, mo + 1, 0).getDate();
+    const lead = (first.getDay() + 6) % 7;
+    let html = '<div class="cal-h"><button type="button" class="cal-nav" data-to="0"' + (calOffset ? '' : ' disabled') + ' aria-label="‹">‹</button><b>' + esc(first.toLocaleDateString(loc, { month: 'long', year: 'numeric' })) + '</b><button type="button" class="cal-nav" data-to="1"' + (calOffset ? ' disabled' : '') + ' aria-label="›">›</button></div><div class="cal-g">';
+    for (let i = 0; i < 7; i++) html += '<i>' + esc(new Date(2024, 0, 1 + i).toLocaleDateString(loc, { weekday: 'narrow' })) + '</i>';
+    for (let i = 0; i < lead; i++) html += '<span></span>';
+    for (let d = 1; d <= days; d++) {
+      const key = y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      const past = y * 10000 + (mo + 1) * 100 + d < today;
+      html += '<span class="d' + (busy.has(key) ? ' b' : '') + (past ? ' p' : '') + '" title="' + esc(busy.has(key) ? S('busy') : S('free')) + '">' + d + '</span>';
+    }
+    $('.cal-m', box).innerHTML = html + '</div>';
+  }
+}
+
 /* ---------------- logo: spectral glitch only where the pointer moves ---------------- */
 
 const mark = $('#mark');
@@ -1060,10 +1090,11 @@ document.addEventListener('click', (e) => {
   if (el.classList.contains('ov-next')) return stepPhoto(1);
   if (el.classList.contains('banner-x')) {
     const b = el.closest('.banner');
-    if (b) { b.classList.add('gone'); if (!PREVIEW) store.set('ay-banner-x', b.dataset.key); }
+    if (b) { b.classList.add('gone'); if (!PREVIEW) sess.set('ay-banner-x', b.dataset.key); }
     return;
   }
   if (el.dataset.lang) return setLang(el.dataset.lang);
+  if (el.classList.contains('cal-nav')) { calOffset = Number(el.dataset.to) || 0; drawCals(); return; }
   if (el.classList.contains('np-play')) return setSound(!recPlaying());
   if (el.classList.contains('np-prev')) { musicPlay(-1); return; }
   if (el.classList.contains('np-next')) { musicPlay(1); return; }
@@ -1137,10 +1168,11 @@ if (cfg.activeTheme) applyTheme();
 if (lang !== document.documentElement.lang || cfg.activeTheme) renderAll();
 else {
   const banner = $('.banner', ui);
-  if (banner && !PREVIEW && store.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
+  if (banner && !PREVIEW && sess.get('ay-banner-x') === banner.dataset.key) banner.classList.add('gone');
   applyMode();
 }
 syncSound();
+drawCals();
 wake();
 
 if (PREVIEW) {

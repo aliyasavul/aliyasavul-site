@@ -131,6 +131,12 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 /* a long title in a card shortens with … instead of widening the list past the column */
 .list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .adds { margin-top: 2px; }
+.cal-ed { display: grid; gap: 14px; }
+.cal-ed b { display: block; margin-bottom: 6px; font-size: 13px; text-transform: capitalize; }
+.cal-eg { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-eg i { font-size: 10px; font-style: normal; text-align: center; color: var(--dim); }
+.cal-eg .d { height: 30px; padding: 0; border: 1px solid var(--line2); border-radius: 4px; background: none; color: inherit; cursor: pointer; font-size: 12px; }
+.cal-eg .d.b { background: var(--accent); border-color: var(--accent); color: #0a0705; font-weight: 600; }
 .card { border: 1px solid var(--line2); border-radius: 8px; background: var(--panel2); }
 .card-h { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--line); }
 .card-h b { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

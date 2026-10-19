@@ -256,6 +256,21 @@ body.in-section .top::before, body.in-section .bottom::before { opacity: 1; }
 
 .copy { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 20px; }
 
+/* availability calendar: booked days in the accent colour, free days on the page's own black */
+.cal { margin-top: 24px; }
+.cal-h { display: flex; align-items: center; justify-content: space-between; margin: 10px 0 6px; font: 600 15px/1 var(--f-display); letter-spacing: 0.14em; text-transform: uppercase; }
+.cal-nav { width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); background: none; cursor: pointer; font-size: 18px; line-height: 1; }
+.cal-nav:disabled { opacity: .25; cursor: default; }
+.cal-g { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-g i { font: 500 10px/20px var(--f-mono); font-style: normal; text-align: center; text-transform: uppercase; color: var(--muted); }
+.cal-g .d { display: grid; place-items: center; aspect-ratio: 1; max-height: 40px; border: 1px solid var(--line); font: 500 13px/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.cal-g .d.b { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.cal-g .d.p { opacity: .3; }
+.cal-k { display: flex; align-items: center; gap: 6px 10px; margin: 10px 0 0; font: 500 11px/1 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.cal-k span { width: 12px; height: 12px; border: 1px solid var(--line); }
+.cal-k .b { background: var(--accent); border-color: var(--accent); }
+.cal-k .f { margin-left: 8px; }
+
 /* rows added in the panel, at the end of a section */
 .x-text { margin: 14px 0 0; max-width: 60ch; }
 .x-small { margin: 10px 0 0; max-width: 60ch; font-size: 14px; line-height: 1.5; color: var(--muted); }

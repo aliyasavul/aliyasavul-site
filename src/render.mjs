@@ -205,6 +205,8 @@ export const DEFAULTS = {
       email: 'info@aliyasavul.com',
       whatsapp: { number: '', message: bi('Merhaba Ali, ders hakkında bilgi almak istiyorum.', "Hi Ali, I'd like to ask about lessons.") },
       booking: { url: '', label: bi('Takvimden gün seç', 'Pick a time') },
+      // a month calendar Ali fills in by hand in the panel: the days in `busy` are booked
+      calendar: { enabled: false, title: bi('Müsaitlik takvimi', 'Availability'), busy: [] },
       links: [
         { label: 'Instagram', url: '' },
         { label: 'YouTube', url: '' },
@@ -217,6 +219,8 @@ export const DEFAULTS = {
     soundOff: bi('Ses kapalı', 'Sound off'),
     nowPlaying: bi('Çalıyor', 'Now playing'),
     paused: bi('Duraklatıldı', 'Paused'),
+    busy: bi('Dolu', 'Booked'),
+    free: bi('Müsait', 'Available'),
     loading: bi('Yükleniyor', 'Loading'),
     recording: bi('Kayıt', 'Recording'),
     player: bi('Çalan şarkı', 'Now playing'),
@@ -366,6 +370,8 @@ export function normalize(raw) {
   }));
   out.gate.extras = cleanExtras(out.gate.extras);
   for (const s of out.sections) s.extras = cleanExtras(s.extras);
+  const ct = out.sections.find((x) => x.id === 'contact');
+  if (ct) ct.calendar.busy = [...new Set((Array.isArray(ct.calendar.busy) ? ct.calendar.busy : []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort().slice(-400);
   const tl = out.timeline;
   tl.stageSize = clampNum(tl.stageSize, 8, 24, 11);
   tl.nameSize = clampNum(tl.nameSize, 50, 150, 100);
@@ -725,6 +731,8 @@ function panelInner(cfg, s, lang) {
     if (s.whatsapp && s.whatsapp.number) acts.push('<a class="btn" href="' + esc(whatsappLink(s.whatsapp.number, L(s.whatsapp.message))) + '" target="_blank" rel="noopener">' + esc(S('whatsapp')) + '</a>');
     if (s.booking && safeUrl(s.booking.url)) acts.push('<a class="btn ghost" href="' + esc(safeUrl(s.booking.url)) + '" target="_blank" rel="noopener">' + esc(L(s.booking.label)) + '</a>');
     if (acts.length) html += '<div class="actions">' + acts.join('') + '</div>';
+    // the month grid is drawn in the browser, so it always shows the visitor's current month
+    if (s.calendar && s.calendar.enabled) html += '<div class="cal" data-busy="' + esc(s.calendar.busy.join(',')) + '"><p class="sub-h">' + esc(L(s.calendar.title)) + '</p><div class="cal-m"></div><p class="cal-k"><span class="b"></span>' + esc(S('busy')) + '<span class="f"></span>' + esc(S('free')) + '</p></div>';
     const links = (s.links || []).map((l) => {
       const u = safeUrl(l.url);
       if (!u || !l.label) return '';

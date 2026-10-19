@@ -1102,6 +1102,10 @@ function tabContact() {
       fBi(p + '.whatsapp.message', 'Hazır mesaj', { multiline: true, rows: 2 })),
     group('Randevu takvimi', 'Calendly, Cal.com ya da Google Takvim randevu linkin varsa ekle; bir düğme olarak görünür.',
       fText(p + '.booking.url', 'Takvim linki', { type: 'url', placeholder: 'https://cal.com/…' }), fBi(p + '.booking.label', 'Düğme yazısı')),
+    group('Müsaitlik takvimi', 'İletişim’de bir aylık takvim olarak görünür: dolu günler vurgu renginde, müsait günler siyah. Sitede her zaman içinde bulunulan ay görünür (ziyaretçi bir sonraki aya da geçebilir); ay bitince kendiliğinden bir sonraki aya geçer. Bir güne tıklayınca dolu / müsait arasında değişir.',
+      fToggle(p + '.calendar.enabled', 'Takvimi göster', null, { rerender: false }),
+      fBi(p + '.calendar.title', 'Başlığı'),
+      calEditor(p + '.calendar.busy')),
     group('Sosyal medya linkleri', 'Boş bıraktıkların sitede görünmez.', listEditor({
       path: p + '.links', itemTitle: (it) => it.label || 'Yeni link',
       fields: (ip) => [fText(ip + '.label', 'Adı', { placeholder: 'Instagram' }), fText(ip + '.url', 'Link', { type: 'url', placeholder: 'https://' })],
@@ -1109,6 +1113,32 @@ function tabContact() {
     })),
     sectionExtras(p),
   ];
+}
+
+// this month and the next two as grids of days; a click marks a day booked or free again
+function calEditor(path) {
+  const busy = get(path);
+  const now = new Date();
+  const wrap = h('div', { class: 'cal-ed' });
+  for (let k = 0; k < 3; k++) {
+    const first = new Date(now.getFullYear(), now.getMonth() + k, 1);
+    const y = first.getFullYear(), mo = first.getMonth();
+    const g = h('div', { class: 'cal-eg' }, ...['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'].map((d) => h('i', { text: d })));
+    for (let i = 0; i < (first.getDay() + 6) % 7; i++) g.append(h('span'));
+    for (let d = 1; d <= new Date(y, mo + 1, 0).getDate(); d++) {
+      const key = y + '-' + String(mo + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      const b = h('button', { type: 'button', class: 'd' + (busy.includes(key) ? ' b' : ''), text: String(d), title: key });
+      b.addEventListener('click', () => {
+        const i = busy.indexOf(key);
+        if (i >= 0) busy.splice(i, 1); else busy.push(key);
+        b.classList.toggle('b', i < 0);
+        changed();
+      });
+      g.append(b);
+    }
+    wrap.append(h('div', null, h('b', { text: first.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }) }), g));
+  }
+  return h('div', { class: 'f' }, h('span', { class: 'f-l', text: 'Dolu günler (tıkla: dolu / müsait)' }), wrap);
 }
 
 function tabBanner() {
