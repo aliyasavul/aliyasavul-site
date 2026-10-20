@@ -1,8 +1,8 @@
 {
   "version": 1,
   "meta": {
-    "rev": "mvfkdc4a-3cfq3p",
-    "updatedAt": "2026-10-19T18:04:29.722Z"
+    "rev": "mvg2dl9s-ucsqy0",
+    "updatedAt": "2026-10-20T02:28:34.672Z"
   },
   "site": {
     "name": "Ali Yasavul",
@@ -217,6 +217,64 @@
       "extras": []
     },
     {
+      "id": "production",
+      "enabled": true,
+      "stamp": "28",
+      "nav": {
+        "tr": "Kayıt, Aranje ve Prodüksiyon",
+        "en": "Recording, Arrangement & Production"
+      },
+      "stage": {
+        "tr": "EVRE 03",
+        "en": "PHASE 03"
+      },
+      "era": {
+        "tr": "",
+        "en": ""
+      },
+      "title": {
+        "tr": "Kayıt, Aranje ve Prodüksiyon",
+        "en": "Recording, Arrangement & Production"
+      },
+      "body": {
+        "tr": "Her şarkının kendine ait bir karakteri var. Gitar kayıtlarından aranje ve prodüksiyona kadar, müziğin ihtiyaçlarına odaklanıyor ve parçayı tamamlayacak fikirler üzerinde çalışıyorum.",
+        "en": "Every song has its own unique character. From guitar recordings to arrangement and production, I focus on what the music needs, developing ideas that complement and enhance each track."
+      },
+      "facts": [
+        {
+          "k": {
+            "tr": "Kayıt",
+            "en": "Recording"
+          },
+          "v": {
+            "tr": "Parçaya özel ritim, lead, solo ve katmanlı gitar kayıtları yapılması.",
+            "en": "Custom rhythm, lead, solo, and layered guitar recordings tailored to each track."
+          }
+        },
+        {
+          "k": {
+            "tr": "Aranje",
+            "en": "Arrangement"
+          },
+          "v": {
+            "tr": "Şarkının yapısını, enstrümanlarını ve dinamiklerini geliştiren müzikal düzenlemeler.",
+            "en": "Musical arrangements that enhance a song's structure, instrumentation, and dynamics."
+          }
+        },
+        {
+          "k": {
+            "tr": "Prodüksiyon",
+            "en": "Production"
+          },
+          "v": {
+            "tr": "Müzikal fikirlerin kayıt, düzenleme ve yaratıcı üretim süreçlerinde bir bütün hâline getirilmesi.",
+            "en": "Bringing musical ideas together through recording, arrangement, and creative production."
+          }
+        }
+      ],
+      "extras": []
+    },
+    {
       "id": "lessons",
       "enabled": true,
       "stamp": "",
@@ -225,8 +283,8 @@
         "en": "Lessons"
       },
       "stage": {
-        "tr": "EVRE 03",
-        "en": "PHASE 03"
+        "tr": "EVRE 04",
+        "en": "PHASE 04"
       },
       "era": {
         "tr": "",
@@ -338,8 +396,8 @@
         "en": "Work"
       },
       "stage": {
-        "tr": "EVRE 04",
-        "en": "PHASE 04"
+        "tr": "EVRE 05",
+        "en": "PHASE 05"
       },
       "era": {
         "tr": "",
@@ -445,8 +503,8 @@
         "en": "Gallery"
       },
       "stage": {
-        "tr": "EVRE 05",
-        "en": "PHASE 05"
+        "tr": "EVRE 06",
+        "en": "PHASE 06"
       },
       "era": {
         "tr": "",
@@ -507,8 +565,8 @@
         "en": "Contact"
       },
       "stage": {
-        "tr": "EVRE 06",
-        "en": "PHASE 06"
+        "tr": "EVRE 07",
+        "en": "PHASE 07"
       },
       "era": {
         "tr": "",
@@ -536,6 +594,14 @@
           "tr": "Takvimden gün seç",
           "en": "Pick a time"
         }
+      },
+      "calendar": {
+        "enabled": false,
+        "title": {
+          "tr": "Müsaitlik takvimi",
+          "en": "Availability"
+        },
+        "busy": []
       },
       "links": [
         {
@@ -566,6 +632,14 @@
     "paused": {
       "tr": "Duraklatıldı",
       "en": "Paused"
+    },
+    "busy": {
+      "tr": "Dolu",
+      "en": "Booked"
+    },
+    "free": {
+      "tr": "Müsait",
+      "en": "Available"
     },
     "loading": {
       "tr": "Yükleniyor",
