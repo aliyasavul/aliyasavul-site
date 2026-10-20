@@ -88,6 +88,8 @@ export const DEFAULTS = {
     colors: { ...PRESETS.amber },
     effects: { glitch: 50, glow: 50, spin: 50, parallax: 50 },
     stone: { preset: 'natural', ...STONE_PRESETS.natural },
+    // text sizes (px; titles and their line height in %), and how long texts are cut
+    type: { h2: 100, h2lh: 105, body: 16, k: 13, v: 15, vAlign: 'left', era: 12, btn: 15, banner: 13, gate: 12, note: 14, more: true, clamp: 6 },
   },
   // saved looks (for example a New Year theme) that can switch on by themselves between two dates
   themes: { auto: true, list: [] },
@@ -254,6 +256,11 @@ export const DEFAULTS = {
   },
 };
 
+// every section can scale its own title (100 = as all titles) and set its line height (0 = as all)
+for (const s of DEFAULTS.sections) Object.assign(s, { titleSize: 100, titleLh: 0 });
+DEFAULTS.strings.readMore = { tr: 'Devamını oku', en: 'Read more' };
+DEFAULTS.strings.readLess = { tr: 'Daha az göster', en: 'Show less' };
+
 /* ---------------- helpers ---------------- */
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -281,7 +288,11 @@ const MD = /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 function sanitizeTheme(th) {
   const base = DEFAULTS.theme;
-  for (const k of ['fonts', 'colors', 'effects', 'stone']) if (!isObj(th[k])) th[k] = clone(base[k]);
+  for (const k of ['fonts', 'colors', 'effects', 'stone', 'type']) if (!isObj(th[k])) th[k] = clone(base[k]);
+  const ty = th.type;
+  for (const [k, lo, hi] of [['h2', 60, 150], ['h2lh', 80, 160], ['body', 12, 22], ['k', 9, 18], ['v', 11, 22], ['era', 9, 18], ['btn', 11, 20], ['banner', 10, 20], ['gate', 9, 20], ['note', 10, 22], ['clamp', 3, 15]]) ty[k] = clampNum(ty[k], lo, hi, base.type[k]);
+  ty.more = ty.more !== false;
+  if (ty.vAlign !== 'right') ty.vAlign = 'left';
   const c = th.colors;
   for (const k of COLOR_KEYS) if (!HEX.test(String(c[k] || ''))) c[k] = base.colors[k];
   const f = th.fonts;
@@ -369,7 +380,11 @@ export function normalize(raw) {
     banner: isObj(th.banner) ? merge(clone(DEFAULTS.banner), th.banner) : null,
   }));
   out.gate.extras = cleanExtras(out.gate.extras);
-  for (const s of out.sections) s.extras = cleanExtras(s.extras);
+  for (const s of out.sections) {
+    s.extras = cleanExtras(s.extras);
+    s.titleSize = clampNum(s.titleSize, 50, 150, 100);
+    s.titleLh = s.titleLh >= 80 ? clampNum(s.titleLh, 80, 160, 105) : 0;
+  }
   const ct = out.sections.find((x) => x.id === 'contact');
   if (ct) ct.calendar.busy = [...new Set((Array.isArray(ct.calendar.busy) ? ct.calendar.busy : []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort().slice(-400);
   const tl = out.timeline;
@@ -547,6 +562,8 @@ export function themeCSS(cfg) {
     '--f-display:' + q(f.display) + ', ' + FALLBACK_STACK.display,
     '--f-body:' + q(f.body) + ', ' + FALLBACK_STACK.body,
     '--f-mono:' + q(f.mono) + ', ' + FALLBACK_STACK.mono,
+    ...((ty) => ['--t-h2:' + ty.h2 / 100, '--t-h2lh:' + ty.h2lh / 100, '--t-body:' + ty.body + 'px', '--t-k:' + ty.k + 'px', '--t-v:' + ty.v + 'px', '--t-v-align:' + ty.vAlign,
+      '--t-era:' + ty.era + 'px', '--t-btn:' + ty.btn + 'px', '--t-banner:' + ty.banner + 'px', '--t-gate:' + ty.gate + 'px', '--t-note:' + ty.note + 'px', '--t-clamp:' + ty.clamp])(cfg.theme.type),
   ].join(';') + '}';
 }
 
@@ -648,7 +665,8 @@ function panelInner(cfg, s, lang) {
   let html = eraHTML(L(s.era));
   html += '<h2 id="h-' + s.id + '">' + esc(L(s.title)) + '</h2>';
   const body = prose(L(s.body));
-  if (body) html += '<div class="prose">' + body + '</div>';
+  // a long text shows its first lines and a "Devamını oku" (the button shows only when the text is cut)
+  if (body) html += cfg.theme.type.more ? '<div class="prose more">' + body + '</div><button type="button" class="more-btn" hidden>' + esc(S('readMore')) + '</button>' : '<div class="prose">' + body + '</div>';
 
   if (s.id === 'about' || s.id === 'production') {
     html += factsHTML(s.facts, lang);
@@ -795,7 +813,7 @@ export function renderUI(cfg, lang) {
   secs.slice(1).forEach((s, i) => {
     const side = (i + 1) % 2 === 1 ? 'left' : 'right';
     const wide = s.id === 'work' || s.id === 'gallery' ? ' data-wide="1"' : '';
-    html += '<section class="panel" id="p-' + s.id + '" data-id="' + s.id + '" data-side="' + side + '"' + wide + ' aria-labelledby="h-' + s.id + '" aria-hidden="true" inert><div class="pin">' + panelInner(cfg, s, lang) + '</div></section>';
+    html += '<section class="panel" id="p-' + s.id + '" data-id="' + s.id + '" data-side="' + side + '"' + wide + ' style="--h2s:' + (s.titleSize || 100) / 100 + (s.titleLh ? ';--h2lh:' + s.titleLh / 100 : '') + '" aria-labelledby="h-' + s.id + '" aria-hidden="true" inert><div class="pin">' + panelInner(cfg, s, lang) + '</div></section>';
   });
   return html;
 }

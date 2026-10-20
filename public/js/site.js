@@ -61,6 +61,7 @@ function renderAll() {
   drawCals();
   // a song that is playing carries on in the new language
   recSync(); recShow();
+  requestAnimationFrame(syncMore);
   if (!enabledSections(cfg).some((s) => s.id === current)) current = 'intro';
   igLoaded = false;
   if (scrollMode) {
@@ -742,6 +743,21 @@ function spStop() {
   spLast = null;
 }
 
+// "Devamını oku" shows only under a text that is cut
+function syncMore() {
+  for (const pr of ui.querySelectorAll('.prose.more')) {
+    const b = pr.nextElementSibling;
+    if (!b || !b.classList.contains('more-btn')) continue;
+    pr.classList.remove('fits');
+    const open = pr.classList.contains('open');
+    const cut = !open && pr.scrollHeight > pr.clientHeight + 4;
+    if (!open && !cut) pr.classList.add('fits');
+    b.hidden = !open && !cut;
+    b.textContent = open ? S('readLess') : S('readMore');
+  }
+}
+window.addEventListener('resize', () => requestAnimationFrame(syncMore));
+
 /* ---------------- availability calendar: this month (and the next), booked days filled ---------------- */
 let calOffset = 0;
 function drawCals() {
@@ -1094,6 +1110,7 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (el.dataset.lang) return setLang(el.dataset.lang);
+  if (el.classList.contains('more-btn')) { const pr = el.previousElementSibling; if (pr) pr.classList.toggle('open'); syncMore(); if (scrollMode) measureSlides(); return; }
   if (el.classList.contains('cal-nav')) { calOffset = Number(el.dataset.to) || 0; drawCals(); return; }
   if (el.classList.contains('np-play')) return setSound(!recPlaying());
   if (el.classList.contains('np-prev')) { musicPlay(-1); return; }
@@ -1173,6 +1190,7 @@ else {
 }
 syncSound();
 drawCals();
+requestAnimationFrame(syncMore);
 wake();
 
 if (PREVIEW) {

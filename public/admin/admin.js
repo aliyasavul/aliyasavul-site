@@ -572,6 +572,7 @@ function setIn(obj, path, value) {
 const MENU_KEYS = ['enabled', 'nav', 'stamp', 'era', 'stage'];
 const contentPaths = (id) => Object.keys(DEFAULTS.sections.find((s) => s.id === id) || {}).filter((k) => k !== 'id' && !MENU_KEYS.includes(k)).map((k) => 'sections.@' + id + '.' + k);
 const RESETS = [
+  { id: 'type', look: true, label: 'Yazı boyutları', hint: 'Bütün yazılar ilk boyutlarına döner.', paths: ['theme.type'] },
   { id: 'colors', look: true, label: 'Renkler', hint: 'Bütün renkler ilk tema olan “Kehribar”a döner.', paths: ['theme.colors', 'theme.preset'] },
   { id: 'stone', look: true, label: 'Taşın rengi', hint: 'Doğal kehribar rengi.', paths: ['theme.stone'] },
   { id: 'fonts', look: true, label: 'Yazı tipleri', paths: ['theme.fonts'] },
@@ -776,6 +777,36 @@ function tabSections() {
 
 // the line of stops at the top: each stop's small line above its name (Evre 1…), its name, the
 // line under it and its number, and the sizes of these texts
+// the sizes of every text on the site, and each section's own title
+function tabType() {
+  const px = (v) => v + ' px', pc = (v) => '%' + v;
+  return [
+    h('p', { class: 'note', text: 'Sitedeki yazıların boyutları; değiştirdikçe önizlemede görürsün. Yazı tiplerini “Renk ve yazı tipi”nden, zaman çizelgesinin yazılarını “Zaman çizelgesi”nden ayarlarsın.' }),
+    group('Bölümler', null,
+      fRange('theme.type.h2', 'Başlıklar', { min: 60, max: 150, step: 5, fmt: pc }),
+      fRange('theme.type.h2lh', 'Başlıkların satır aralığı', { min: 80, max: 160, step: 5, fmt: pc, hint: 'Başlık iki satıra inince Ü, İ gibi harflerin noktaları üst satıra değiyorsa artır.' }),
+      fRange('theme.type.body', 'Yazılar', { min: 12, max: 22, fmt: px }),
+      fRange('theme.type.era', 'Başlığın üstündeki tarih satırı', { min: 9, max: 18, fmt: px }),
+      fRange('theme.type.k', 'Satırların sol tarafı (etiket)', { min: 9, max: 18, fmt: px }),
+      fRange('theme.type.v', 'Satırların sağ tarafı', { min: 11, max: 22, fmt: px }),
+      fSelect('theme.type.vAlign', 'Satırların sağ tarafı', [{ value: 'left', label: 'İkinci sütun gibi, sola dayalı' }, { value: 'right', label: 'Sağa dayalı' }]),
+      fRange('theme.type.btn', 'Düğmeler', { min: 11, max: 20, fmt: px })),
+    group('Uzun yazılar', 'Uzun bir yazının ilk satırları görünür, altında “Devamını oku” çıkar.',
+      fToggle('theme.type.more', 'Uzun yazıları kısalt', null, { rerender: false }),
+      fRange('theme.type.clamp', 'Kaç satırı görünsün', { min: 3, max: 15 })),
+    group('Giriş ekranı ve duyuru bandı', null,
+      fRange('theme.type.gate', 'Logonun altındaki satır', { min: 9, max: 20, fmt: px }),
+      fRange('theme.type.note', 'Küçük açıklama', { min: 10, max: 22, fmt: px }),
+      fRange('theme.type.banner', 'Duyuru bandı', { min: 10, max: 20, fmt: px })),
+    group('Her bölümün başlığı', 'Yukarıdaki ayarın üstüne her bölüm için ayrıca: %100 ve “genel” hepsiyle aynı demek.',
+      h('div', { class: 'list' }, S.draft.sections.map((s, i) => h('div', { class: 'card' },
+        h('div', { class: 'card-h' }, h('b', { text: SECTION_NAMES[s.id] || s.id })),
+        h('div', { class: 'card-b' },
+          fRange('sections.' + i + '.titleSize', 'Başlığın boyutu', { min: 50, max: 150, step: 5, fmt: pc }),
+          fRange('sections.' + i + '.titleLh', 'Başlığın satır aralığı', { min: 0, max: 160, step: 5, fmt: (v) => (v >= 80 ? '%' + v : 'genel') })))))),
+  ];
+}
+
 function tabTimeline() {
   const stops = [{ p: 'intro', name: 'Giriş' }, ...S.draft.sections.map((s, i) => ({ p: 'sections.' + i, name: SECTION_NAMES[s.id] || s.id, off: !s.enabled }))];
   const px = (v) => v + ' px';
@@ -1317,6 +1348,7 @@ const TABS = [
   { id: 'design', group: 'Görünüm', label: 'Renk ve yazı tipi', focus: 'intro', render: tabDesign, lead: 'Sitenin renkleri, yazı tipleri ve taşın rengi. Değiştirdikçe sağda önizlemede görürsün.' },
   { id: 'themes', group: 'Görünüm', label: 'Temalar', focus: 'intro', render: tabThemes },
   { id: 'effects', group: 'Görünüm', label: 'Efektler ve ses', focus: 'intro', render: tabEffects },
+  { id: 'type', group: 'Görünüm', label: 'Yazı boyutları', focus: null, render: tabType },
   { id: 'media', group: 'Görünüm', label: 'Logo', focus: 'intro', render: tabMedia },
   { id: 'gate', group: 'İçerik', label: 'Giriş ve üst düğme', focus: 'gate', render: tabGate },
   { id: 'sections', group: 'İçerik', label: 'Menü ve bölümler', focus: null, render: tabSections },

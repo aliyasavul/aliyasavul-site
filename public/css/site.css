@@ -455,3 +455,28 @@ body.mute-site .sound, body.mute-site .gate-sound, body.mute-site .now { visibil
   .mark, .gate, .stone video, .stone .poster { transition-duration: .01s !important; transition-delay: 0s !important; }
   .pin { transform: none !important; }
 }
+
+/* text sizes from the panel (Görünüm › Yazı boyutları); every section can scale its own title */
+.panel h2 { font-size: calc(clamp(38px, 4.4vw, 60px) * var(--t-h2, 1) * var(--h2s, 1)); line-height: var(--h2lh, var(--t-h2lh, 1.05)); }
+.prose, .x-text { font-size: var(--t-body, 16px); }
+.facts li { display: grid; grid-template-columns: minmax(96px, 36%) minmax(0, 1fr); align-items: baseline; gap: 4px 20px; }
+.facts .k { font-size: var(--t-k, 13px); }
+.facts .v { font-size: var(--t-v, 15px); text-align: var(--t-v-align, left); text-wrap: pretty; }
+.era { font-size: var(--t-era, 12px); }
+.btn { font-size: var(--t-btn, 15px); }
+.banner { font-size: var(--t-banner, 13px); }
+.gate-sub { font-size: var(--t-gate, 12px); }
+.gate-note { font-size: var(--t-note, 14px); }
+/* long texts: the first lines, fading out, then "Devamını oku" */
+.prose.more:not(.open):not(.fits) { max-height: calc(var(--t-clamp, 6) * 1.55em); overflow: hidden; -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }
+.more-btn { margin: 0 0 6px; padding: 6px 0; border: 0; border-bottom: 1px solid var(--line-strong); background: none; cursor: pointer; font: 600 12px/1.2 var(--f-display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--text); text-shadow: none; }
+.more-btn:hover { color: var(--accent); border-color: var(--accent); }
+.more-btn[hidden] { display: none; }
+/* the announcement: its text centred on the whole width, the × on its own at the right */
+.banner { position: relative; padding-left: calc(40px + var(--gutter-l)); padding-right: calc(40px + var(--gutter-r)); }
+.banner-x { position: absolute; right: calc(var(--gutter-r) - 6px); top: 50%; transform: translateY(-50%); }
+@media (max-width: 760px), (max-aspect-ratio: 1/1) {
+  .panel h2 { font-size: calc(34px * var(--t-h2, 1) * var(--h2s, 1)); }
+  .facts li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .facts .v { text-align: left; }
+}
