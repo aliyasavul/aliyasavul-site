@@ -243,3 +243,16 @@ ul.plain { margin: 0 0 14px; padding-left: 18px; color: var(--text); }
 .rec-audio { width: 100%; height: 36px; margin-bottom: 4px; }
 
 .rec-audio { color-scheme: dark; }
+
+/* ⓘ: what a setting is for, shown when the mouse is on it */
+.tip { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 6px; border: 1px solid var(--line2); border-radius: 50%; font: italic 600 10px/1 Georgia, serif; color: var(--dim); cursor: help; vertical-align: 1px; }
+.tip:hover, .tip:focus-visible { color: var(--accent); border-color: var(--accent); }
+.tip:hover::after, .tip:focus-visible::after {
+  content: attr(data-tip); position: absolute; z-index: 50; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+  width: max-content; max-width: 260px; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 6px; background: #0b0a09;
+  font: 400 12px/1.45 system-ui, sans-serif; font-style: normal; color: #ece4d6; white-space: normal; text-align: left; pointer-events: none;
+}
+.ty-sec > summary { cursor: pointer; list-style: none; }
+.ty-sec > summary::-webkit-details-marker { display: none; }
+.ty-sec > summary b::before { content: '▸ '; color: var(--dim); }
+.ty-sec[open] > summary b::before { content: '▾ '; }

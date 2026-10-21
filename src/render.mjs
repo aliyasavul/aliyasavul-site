@@ -89,7 +89,7 @@ export const DEFAULTS = {
     effects: { glitch: 50, glow: 50, spin: 50, parallax: 50 },
     stone: { preset: 'natural', ...STONE_PRESETS.natural },
     // text sizes (px; titles and their line height in %), and how long texts are cut
-    type: { h2: 100, h2lh: 105, body: 16, k: 13, v: 15, vAlign: 'left', era: 12, btn: 15, banner: 13, gate: 12, note: 14, more: true, clamp: 6 },
+    type: { h2: 100, h2lh: 105, body: 16, k: 13, v: 15, vAlign: 'left', era: 12, btn: 15, sub: 12, small: 14, pkn: 20, pkp: 15, rect: 15, mail: 17, banner: 13, gate: 12, note: 14, more: true, clamp: 6 },
   },
   // saved looks (for example a New Year theme) that can switch on by themselves between two dates
   themes: { auto: true, list: [] },
@@ -257,7 +257,9 @@ export const DEFAULTS = {
 };
 
 // every section can scale its own title (100 = as all titles) and set its line height (0 = as all)
-for (const s of DEFAULTS.sections) Object.assign(s, { titleSize: 100, titleLh: 0 });
+// and scale each of its other texts (% of the size set for all sections)
+export const SIZE_KEYS = ['era', 'body', 'k', 'v', 'sub', 'small', 'btn', 'pkn', 'pkp', 'rect', 'mail'];
+for (const s of DEFAULTS.sections) Object.assign(s, { titleSize: 100, titleLh: 0, sizes: Object.fromEntries(SIZE_KEYS.map((k) => [k, 100])) });
 DEFAULTS.strings.readMore = { tr: 'Devamını oku', en: 'Read more' };
 DEFAULTS.strings.readLess = { tr: 'Daha az göster', en: 'Show less' };
 
@@ -290,7 +292,7 @@ function sanitizeTheme(th) {
   const base = DEFAULTS.theme;
   for (const k of ['fonts', 'colors', 'effects', 'stone', 'type']) if (!isObj(th[k])) th[k] = clone(base[k]);
   const ty = th.type;
-  for (const [k, lo, hi] of [['h2', 60, 150], ['h2lh', 80, 160], ['body', 12, 22], ['k', 9, 18], ['v', 11, 22], ['era', 9, 18], ['btn', 11, 20], ['banner', 10, 20], ['gate', 9, 20], ['note', 10, 22], ['clamp', 3, 15]]) ty[k] = clampNum(ty[k], lo, hi, base.type[k]);
+  for (const [k, lo, hi] of [['h2', 60, 150], ['h2lh', 80, 160], ['body', 12, 22], ['k', 9, 18], ['v', 11, 22], ['era', 9, 18], ['btn', 11, 20], ['sub', 9, 18], ['small', 10, 20], ['pkn', 12, 30], ['pkp', 10, 24], ['rect', 11, 24], ['mail', 12, 26], ['banner', 10, 20], ['gate', 9, 20], ['note', 10, 22], ['clamp', 3, 15]]) ty[k] = clampNum(ty[k], lo, hi, base.type[k]);
   ty.more = ty.more !== false;
   if (ty.vAlign !== 'right') ty.vAlign = 'left';
   const c = th.colors;
@@ -384,6 +386,8 @@ export function normalize(raw) {
     s.extras = cleanExtras(s.extras);
     s.titleSize = clampNum(s.titleSize, 50, 150, 100);
     s.titleLh = s.titleLh >= 80 ? clampNum(s.titleLh, 80, 160, 105) : 0;
+    const sz = isObj(s.sizes) ? s.sizes : {};
+    s.sizes = Object.fromEntries(SIZE_KEYS.map((k) => [k, clampNum(sz[k], 50, 200, 100)]));
   }
   const ct = out.sections.find((x) => x.id === 'contact');
   if (ct) ct.calendar.busy = [...new Set((Array.isArray(ct.calendar.busy) ? ct.calendar.busy : []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort().slice(-400);
@@ -563,7 +567,7 @@ export function themeCSS(cfg) {
     '--f-body:' + q(f.body) + ', ' + FALLBACK_STACK.body,
     '--f-mono:' + q(f.mono) + ', ' + FALLBACK_STACK.mono,
     ...((ty) => ['--t-h2:' + ty.h2 / 100, '--t-h2lh:' + ty.h2lh / 100, '--t-body:' + ty.body + 'px', '--t-k:' + ty.k + 'px', '--t-v:' + ty.v + 'px', '--t-v-align:' + ty.vAlign,
-      '--t-era:' + ty.era + 'px', '--t-btn:' + ty.btn + 'px', '--t-banner:' + ty.banner + 'px', '--t-gate:' + ty.gate + 'px', '--t-note:' + ty.note + 'px', '--t-clamp:' + ty.clamp])(cfg.theme.type),
+      '--t-era:' + ty.era + 'px', '--t-btn:' + ty.btn + 'px', '--t-sub:' + ty.sub + 'px', '--t-small:' + ty.small + 'px', '--t-pkn:' + ty.pkn + 'px', '--t-pkp:' + ty.pkp + 'px', '--t-rect:' + ty.rect + 'px', '--t-mail:' + ty.mail + 'px', '--t-banner:' + ty.banner + 'px', '--t-gate:' + ty.gate + 'px', '--t-note:' + ty.note + 'px', '--t-clamp:' + ty.clamp])(cfg.theme.type),
   ].join(';') + '}';
 }
 
@@ -813,7 +817,7 @@ export function renderUI(cfg, lang) {
   secs.slice(1).forEach((s, i) => {
     const side = (i + 1) % 2 === 1 ? 'left' : 'right';
     const wide = s.id === 'work' || s.id === 'gallery' ? ' data-wide="1"' : '';
-    html += '<section class="panel" id="p-' + s.id + '" data-id="' + s.id + '" data-side="' + side + '"' + wide + ' style="--h2s:' + (s.titleSize || 100) / 100 + (s.titleLh ? ';--h2lh:' + s.titleLh / 100 : '') + '" aria-labelledby="h-' + s.id + '" aria-hidden="true" inert><div class="pin">' + panelInner(cfg, s, lang) + '</div></section>';
+    html += '<section class="panel" id="p-' + s.id + '" data-id="' + s.id + '" data-side="' + side + '"' + wide + ' style="--h2s:' + (s.titleSize || 100) / 100 + (s.titleLh ? ';--h2lh:' + s.titleLh / 100 : '') + Object.entries(s.sizes || {}).filter(([, v]) => v !== 100).map(([k, v]) => ';--s-' + k + ':' + v / 100).join('') + '" aria-labelledby="h-' + s.id + '" aria-hidden="true" inert><div class="pin">' + panelInner(cfg, s, lang) + '</div></section>';
   });
   return html;
 }

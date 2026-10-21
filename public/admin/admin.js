@@ -2,7 +2,7 @@
 // Everything editable lives in content/site.json. The panel loads it from GitHub, edits a
 // draft with a live preview, and publishes the draft (plus any new files) as one commit;
 // Cloudflare rebuilds the site from that commit within about a minute.
-import { normalize, clone, FONT_CATALOG, PRESETS, COLOR_KEYS, DEFAULTS, STONE_PRESETS, ROLES, youtubeId, spotifyRef, t, themeForDate } from '/js/render.js';
+import { normalize, clone, FONT_CATALOG, PRESETS, COLOR_KEYS, DEFAULTS, STONE_PRESETS, ROLES, SIZE_KEYS, youtubeId, spotifyRef, t, themeForDate } from '/js/render.js';
 
 /* ======================= small helpers ======================= */
 
@@ -315,7 +315,16 @@ const nid = () => 'f' + (++uid);
 const lbl = (id, text, extra) => h('label', { class: 'f-l', for: id }, text, extra || null);
 const help = (text) => (text ? h('div', { class: 'f-h', text }) : null);
 function group(title, gh_, ...kids) {
-  return h('section', { class: 'group' }, title ? h('h3', { text: title }) : null, gh_ ? h('p', { class: 'gh', text: gh_ }) : null, ...kids);
+  const sec = h('section', { class: 'group' }, title ? h('h3', { text: title }) : null, gh_ ? h('p', { class: 'gh', text: gh_ }) : null, ...kids);
+  return title ? withReset(sec, title) : sec;
+}
+// every box of settings gets an "İlk haline döndür" for the settings in it (a list counts as one)
+function withReset(sec, title) {
+  const all = [...new Set([...sec.querySelectorAll('[data-path]')].map((x) => x.dataset.path))];
+  const paths = all.filter((p) => !all.some((q) => q !== p && p.startsWith(q + '.')));
+  if (!paths.length) return sec;
+  sec.querySelector(':scope > h3').replaceWith(h('div', { class: 'g-top' }, h('h3', { text: title }), resetBtn({ label: title, paths }, title)));
+  return sec;
 }
 // a group with a small button next to its title (an "İlk haline döndür" button)
 function groupA(title, gh_, action, ...kids) {
@@ -327,7 +336,7 @@ function fText(path, label, { type = 'text', placeholder = '', hint = '', onComm
   const inp = h('input', { id, type, placeholder, inputmode, autocomplete: 'off', spellcheck: type === 'text' ? 'true' : 'false', value: get(path) ?? '' });
   inp.addEventListener('input', () => set(path, inp.value));
   if (onCommit) inp.addEventListener('change', () => onCommit(inp.value));
-  return h('div', { class: 'f' }, lbl(id, label), inp, help(hint));
+  return h('div', { class: 'f', 'data-path': path }, lbl(id, label), inp, help(hint));
 }
 
 function fBi(path, label, { multiline = false, hint = '', rows = 4, max = 0, placeholder } = {}) {
@@ -344,13 +353,13 @@ function fBi(path, label, { multiline = false, hint = '', rows = 4, max = 0, pla
     count();
     box.append(h('div', { class: 'lng' }, h('span', { text: lg.toUpperCase() }), ctl, counter));
   }
-  return h('div', { class: 'f' }, lbl(first, label), box, help(hint));
+  return h('div', { class: 'f', 'data-path': path }, lbl(first, label), box, help(hint));
 }
 
 function fToggle(path, label, hint, { rerender = false } = {}) {
   const inp = h('input', { type: 'checkbox', checked: !!get(path) });
   inp.addEventListener('change', () => set(path, inp.checked, { rerender }));
-  return h('label', { class: 'switch' }, h('span', null, h('b', { text: label }), hint ? h('small', { text: hint }) : null), inp, h('span', { class: 'track', 'aria-hidden': 'true' }));
+  return h('label', { class: 'switch', 'data-path': path }, h('span', null, h('b', { text: label }), hint ? h('small', { text: hint }) : null), inp, h('span', { class: 'track', 'aria-hidden': 'true' }));
 }
 
 function fSelect(path, label, options, { hint = '', rerender = false } = {}) {
@@ -358,16 +367,32 @@ function fSelect(path, label, options, { hint = '', rerender = false } = {}) {
   const sel = h('select', { id }, options.map((o) => h('option', { value: o.value, text: o.label })));
   sel.value = get(path) ?? '';
   sel.addEventListener('change', () => set(path, sel.value, { rerender }));
-  return h('div', { class: 'f' }, lbl(id, label), sel, help(hint));
+  return h('div', { class: 'f', 'data-path': path }, lbl(id, label), sel, help(hint));
 }
 
-function fRange(path, label, { min = 0, max = 100, step: st = 1, hint = '', fmt = (v) => String(v) } = {}) {
+function fRange(path, label, { min = 0, max = 100, step: st = 1, hint = '', fmt = (v) => String(v), info = '', hl = '' } = {}) {
   const id = nid();
   const v0 = Number(get(path)) || 0;
-  const inp = h('input', { id, type: 'range', min, max, step: st, value: v0 });
+  const inp = h('input', { id, type: 'range', min, max, step: st, value: v0, title: 'Çift tıkla: ilk değerine döner' });
   const out = h('output', { for: id, text: fmt(v0) });
   inp.addEventListener('input', () => { const v = Number(inp.value); out.textContent = fmt(v); set(path, v); });
-  return h('div', { class: 'f' }, lbl(id, label), h('div', { class: 'range' }, inp, out), help(hint));
+  inp.addEventListener('dblclick', () => {
+    const d = getIn(ORIGINAL, path);
+    if (typeof d === 'number') { inp.value = d; inp.dispatchEvent(new Event('input')); }
+  });
+  return pointsAt(h('div', { class: 'f', 'data-path': path }, lbl(id, label, tip(info)), h('div', { class: 'range' }, inp, out), help(hint)), hl);
+}
+// a small ⓘ that shows what a setting is for when the mouse is on it
+const tip = (text) => (text ? h('span', { class: 'tip', tabindex: '0', 'data-tip': text, 'aria-label': text }, 'i') : null);
+// while the mouse is on a setting, the preview outlines the texts it changes
+function pointsAt(el, sel) {
+  if (!sel) return el;
+  const send = (v) => { const f = $('#pv'); if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'ay:hl', sel: v }, location.origin); };
+  el.addEventListener('mouseenter', () => send(sel));
+  el.addEventListener('focusin', () => send(sel));
+  el.addEventListener('mouseleave', () => send(null));
+  el.addEventListener('focusout', () => send(null));
+  return el;
 }
 
 function fColor(path, label, hint) {
@@ -378,7 +403,7 @@ function fColor(path, label, hint) {
   const apply = (val) => { S.draft.theme.preset = 'custom'; set(path, val.toLowerCase()); };
   pick.addEventListener('input', () => { hex.value = pick.value; apply(pick.value); });
   hex.addEventListener('input', () => { const s = hex.value.trim(); if (/^#[0-9a-f]{6}$/i.test(s)) { pick.value = s.toLowerCase(); apply(s); } });
-  return h('div', { class: 'f' }, lbl(id, label), h('div', { class: 'color' }, pick, hex), help(hint));
+  return h('div', { class: 'f', 'data-path': path }, lbl(id, label), h('div', { class: 'color' }, pick, hex), help(hint));
 }
 
 const loadedFonts = new Set();
@@ -419,7 +444,7 @@ function fFont(role, label, hint) {
     show(v);
   });
   show(cur);
-  return h('div', { class: 'f' }, lbl(id, label), sel, custom, sample, help(hint));
+  return h('div', { class: 'f', 'data-path': path }, lbl(id, label), sel, custom, sample, help(hint));
 }
 
 async function withBusy(label, fn) {
@@ -443,7 +468,7 @@ function fileButton(text, accept, multiple, onFiles, iconName = 'img') {
 let newCardIn = '';
 function listEditor({ path, itemTitle, fields, newItem, addLabel, empty, off, adds }) {
   const arr = get(path) || [];
-  const wrap = h('div', { class: 'list' });
+  const wrap = h('div', { class: 'list', 'data-path': path });
   const move = (i, d) => { const j = i + d; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; changed({ rerender: true }); };
   const drop = async (i) => {
     const ok = await dialog({ title: 'Silinsin mi?', body: '“' + (itemTitle(arr[i], i) || 'Bu öğe') + '” listeden çıkarılacak. Yayınlamadan önce “Değişiklikleri at” ile geri alabilirsin.', ok: 'Sil', danger: true });
@@ -777,33 +802,64 @@ function tabSections() {
 
 // the line of stops at the top: each stop's small line above its name (Evre 1…), its name, the
 // line under it and its number, and the sizes of these texts
-// the sizes of every text on the site, and each section's own title
+// Every text the size settings reach: its name, what it is, where it shows (for the preview's
+// outline), and its range in px (or % for the titles).
+const TYPE_ROLES = [
+  { k: 'h2', label: 'Başlıklar', pc: true, min: 60, max: 150, step: 5, sel: 'h2', info: 'Her bölümün büyük başlığı (HAKKIMDA, GİTAR DERSLERİ…).' },
+  { k: 'h2lh', label: 'Başlıkların satır aralığı', pc: true, min: 80, max: 160, step: 5, sel: 'h2', info: 'Başlık iki satıra inince satırların arası. Ü, İ gibi harflerin noktaları üst satıra değiyorsa artır.' },
+  { k: 'era', label: 'Tarih satırı', min: 9, max: 18, sel: '.era', info: 'Başlığın hemen üstündeki küçük turuncu satır (23 milyon yıl önce · Miyosen).' },
+  { k: 'body', label: 'Yazılar', min: 12, max: 22, sel: '.prose, .x-text', info: 'Başlığın altındaki paragraflar ve eklediğin yazı satırları.' },
+  { k: 'k', label: 'Satırların sol tarafı', min: 9, max: 18, sel: '.facts .k', info: 'İki sütunlu satırlarda soldaki küçük, büyük harfli etiket (ENSTRÜMAN, NEREDE…).' },
+  { k: 'v', label: 'Satırların sağ tarafı', min: 11, max: 22, sel: '.facts .v', info: 'İki sütunlu satırlarda etiketin karşısındaki yazı.' },
+  { k: 'sub', label: 'Ara başlıklar', min: 9, max: 18, sel: '.sub-h, .ig-h', info: 'Listelerin üstündeki küçük başlıklar (KAYITLAR, SPOTIFY’DA, INSTAGRAM) ve eklediğin ara başlıklar.' },
+  { k: 'small', label: 'Küçük yazılar', min: 10, max: 20, sel: '.x-small, .packages p', info: 'Eklediğin küçük açıklamalar ve ders paketlerinin açıklaması.' },
+  { k: 'btn', label: 'Düğmeler', min: 11, max: 20, sel: '.btn', info: 'Bölümlerdeki düğmelerin yazısı (DERS AYARLA, INSTAGRAM’DA TAKİP ET…).' },
+  { k: 'pkn', label: 'Ders paketinin adı', min: 12, max: 30, sel: '.pk-h b', only: 'lessons', info: 'Dersler’deki kutuların adı (TEK DERS, 4 DERSLİK PAKET…).' },
+  { k: 'pkp', label: 'Ders fiyatı', min: 10, max: 24, sel: '.pk-p', only: 'lessons', info: 'Dersler’deki kutuların sağındaki fiyat.' },
+  { k: 'rect', label: 'Kayıt adı', min: 11, max: 24, sel: '.rec .trk-t', only: 'work', info: 'Portfolyo’daki kendi kayıtlarının adı.' },
+  { k: 'mail', label: 'E-posta adresi', min: 12, max: 26, sel: '.copy .mail', only: 'contact', info: 'İletişim’deki e-posta adresin.' },
+];
+const scoped = (scope, sel) => sel.split(',').map((x) => scope + ' ' + x.trim()).join(', ');
 function tabType() {
+  const ty = S.draft.theme.type;
   const px = (v) => v + ' px', pc = (v) => '%' + v;
+  const roleRange = (r) => fRange('theme.type.' + r.k, r.label, { min: r.min, max: r.max, step: r.step || 1, fmt: r.pc ? pc : px, info: r.info, hl: scoped('.panel', r.sel) });
+  const keys = (list) => list.map((k) => 'theme.type.' + k);
+  const area = (label, list) => ({ label, paths: keys(list) });
+  const gateBtn = h('button', { type: 'button', class: 'btn small', onclick: () => { S.pvGate = !S.pvGate; gateBtn.textContent = S.pvGate ? 'Önizlemede siteye dön' : 'Önizlemede giriş ekranını göster'; postPreview(); } }, S.pvGate ? 'Önizlemede siteye dön' : 'Önizlemede giriş ekranını göster');
+  const sections = S.draft.sections.map((s) => {
+    const p = 'sections.@' + s.id;
+    const sc = '#p-' + s.id;
+    const roles = TYPE_ROLES.filter((r) => r.k !== 'h2' && r.k !== 'h2lh' && (!r.only || r.only === s.id));
+    const box = h('details', { class: 'card ty-sec' },
+      h('summary', { class: 'card-h' }, h('b', { text: SECTION_NAMES[s.id] || s.id }), resetBtn({ label: SECTION_NAMES[s.id] || s.id, paths: [p + '.titleSize', p + '.titleLh', p + '.sizes'] }, (SECTION_NAMES[s.id] || s.id) + ' yazı boyutları')),
+      h('div', { class: 'card-b' },
+        fRange(p + '.titleSize', 'Başlık', { min: 50, max: 150, step: 5, fmt: (v) => '%' + v, info: 'Bu bölümün başlığı, bütün başlıkların ayarına göre.', hl: sc + ' h2' }),
+        fRange(p + '.titleLh', 'Başlığın satır aralığı', { min: 0, max: 160, step: 5, fmt: (v) => (v >= 80 ? '%' + v : 'genel'), info: 'Sola çekersen bütün başlıkların ayarını kullanır.', hl: sc + ' h2' }),
+        ...roles.map((r) => fRange(p + '.sizes.' + r.k, r.label, { min: 50, max: 200, step: 5, fmt: (v) => '%' + v + ' · ' + Math.round(ty[r.k] * v / 10) / 10 + ' px', info: r.info + ' Sadece bu bölümde, bütün bölümlerin ayarına göre.', hl: scoped(sc, r.sel) }))));
+    // the ↺ button in the title row resets without opening or closing the box
+    box.firstChild.addEventListener('click', (e) => { if (e.target.closest('button')) e.preventDefault(); });
+    return box;
+  });
   return [
-    h('p', { class: 'note', text: 'Sitedeki yazıların boyutları; değiştirdikçe önizlemede görürsün. Yazı tiplerini “Renk ve yazı tipi”nden, zaman çizelgesinin yazılarını “Zaman çizelgesi”nden ayarlarsın.' }),
-    group('Bölümler', null,
-      fRange('theme.type.h2', 'Başlıklar', { min: 60, max: 150, step: 5, fmt: pc }),
-      fRange('theme.type.h2lh', 'Başlıkların satır aralığı', { min: 80, max: 160, step: 5, fmt: pc, hint: 'Başlık iki satıra inince Ü, İ gibi harflerin noktaları üst satıra değiyorsa artır.' }),
-      fRange('theme.type.body', 'Yazılar', { min: 12, max: 22, fmt: px }),
-      fRange('theme.type.era', 'Başlığın üstündeki tarih satırı', { min: 9, max: 18, fmt: px }),
-      fRange('theme.type.k', 'Satırların sol tarafı (etiket)', { min: 9, max: 18, fmt: px }),
-      fRange('theme.type.v', 'Satırların sağ tarafı', { min: 11, max: 22, fmt: px }),
-      fSelect('theme.type.vAlign', 'Satırların sağ tarafı', [{ value: 'left', label: 'İkinci sütun gibi, sola dayalı' }, { value: 'right', label: 'Sağa dayalı' }]),
-      fRange('theme.type.btn', 'Düğmeler', { min: 11, max: 20, fmt: px })),
-    group('Uzun yazılar', 'Uzun bir yazının ilk satırları görünür, altında “Devamını oku” çıkar.',
+    h('p', { class: 'note', text: 'Sitedeki bütün yazıların boyutları. Bir ayarın üstüne gelince önizlemede değiştirdiği yazılar kesik çizgiyle gösterilir; ⓘ işaretinin üstüne gelince ne işe yaradığı yazar. Kaydırma çubuğuna çift tıklarsan ilk değerine döner. Yazı tipleri “Renk ve yazı tipi”nde, zaman çizelgesinin yazıları “Zaman çizelgesi”nde.' }),
+    groupA('Başlıklar', 'Bütün bölümlerin başlıkları.', resetBtn(area('Başlıklar', ['h2', 'h2lh', 'era']), 'Başlık boyutları'),
+      ...TYPE_ROLES.filter((r) => ['h2', 'h2lh', 'era'].includes(r.k)).map(roleRange)),
+    groupA('Yazılar ve satırlar', 'Bütün bölümlerdeki yazılar.', resetBtn(area('Yazılar ve satırlar', ['body', 'k', 'v', 'vAlign', 'sub', 'small', 'btn']), 'Yazı boyutları'),
+      ...TYPE_ROLES.filter((r) => ['body', 'k', 'v'].includes(r.k)).map(roleRange),
+      pointsAt(fSelect('theme.type.vAlign', 'Satırların sağ tarafının hizası', [{ value: 'left', label: 'İkinci sütun gibi, sola dayalı' }, { value: 'right', label: 'Sağa dayalı' }]), '.panel .facts .v'),
+      ...TYPE_ROLES.filter((r) => ['sub', 'small', 'btn'].includes(r.k)).map(roleRange)),
+    groupA('Dersler, Portfolyo ve İletişim', 'Bu bölümlere özel yazılar.', resetBtn(area('Bölümlere özel yazılar', ['pkn', 'pkp', 'rect', 'mail']), 'Bölümlere özel yazılar'),
+      ...TYPE_ROLES.filter((r) => r.only).map(roleRange)),
+    groupA('Uzun yazılar', 'Uzun bir yazının ilk satırları görünür, altında “Devamını oku” çıkar.', resetBtn(area('Uzun yazılar', ['more', 'clamp']), 'Uzun yazılar'),
       fToggle('theme.type.more', 'Uzun yazıları kısalt', null, { rerender: false }),
-      fRange('theme.type.clamp', 'Kaç satırı görünsün', { min: 3, max: 15 })),
-    group('Giriş ekranı ve duyuru bandı', null,
-      fRange('theme.type.gate', 'Logonun altındaki satır', { min: 9, max: 20, fmt: px }),
-      fRange('theme.type.note', 'Küçük açıklama', { min: 10, max: 22, fmt: px }),
-      fRange('theme.type.banner', 'Duyuru bandı', { min: 10, max: 20, fmt: px })),
-    group('Her bölümün başlığı', 'Yukarıdaki ayarın üstüne her bölüm için ayrıca: %100 ve “genel” hepsiyle aynı demek.',
-      h('div', { class: 'list' }, S.draft.sections.map((s, i) => h('div', { class: 'card' },
-        h('div', { class: 'card-h' }, h('b', { text: SECTION_NAMES[s.id] || s.id })),
-        h('div', { class: 'card-b' },
-          fRange('sections.' + i + '.titleSize', 'Başlığın boyutu', { min: 50, max: 150, step: 5, fmt: pc }),
-          fRange('sections.' + i + '.titleLh', 'Başlığın satır aralığı', { min: 0, max: 160, step: 5, fmt: (v) => (v >= 80 ? '%' + v : 'genel') })))))),
+      fRange('theme.type.clamp', 'Kaç satırı görünsün', { min: 3, max: 15, info: '“Devamını oku”ya basılmadan önce görünen satır sayısı.', hl: '.panel .prose.more' })),
+    groupA('Giriş ekranı ve duyuru bandı', 'Giriş ekranını önizlemede görmek için aşağıdaki düğmeye bas.', resetBtn(area('Giriş ekranı ve duyuru bandı', ['gate', 'note', 'banner']), 'Giriş ekranı ve duyuru yazıları'),
+      h('div', { class: 'row', style: 'margin-bottom:10px' }, gateBtn),
+      fRange('theme.type.gate', 'Logonun altındaki satır', { min: 9, max: 20, fmt: px, info: 'Giriş ekranında logonun altındaki satır (GİTARİST · EĞİTMEN…).', hl: '#gate .gate-sub' }),
+      fRange('theme.type.note', 'Küçük açıklama', { min: 10, max: 22, fmt: px, info: 'Giriş ekranında o satırın altına eklediğin küçük açıklamalar.', hl: '#gate .gate-note' }),
+      fRange('theme.type.banner', 'Duyuru bandı', { min: 10, max: 20, fmt: px, info: 'Sayfanın en üstündeki duyuru bandının yazısı.', hl: '.banner' })),
+    group('Her bölüm için ayrıca', 'Bir bölümü aç; oradaki her yazıyı sadece o bölümde büyütüp küçültebilirsin. %100 = yukarıdaki genel ayar.', h('div', { class: 'list' }, ...sections)),
   ];
 }
 
@@ -1169,7 +1225,7 @@ function calEditor(path) {
     }
     wrap.append(h('div', null, h('b', { text: first.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }) }), g));
   }
-  return h('div', { class: 'f' }, h('span', { class: 'f-l', text: 'Dolu günler (tıkla: dolu / müsait)' }), wrap);
+  return h('div', { class: 'f', 'data-path': path }, h('span', { class: 'f-l', text: 'Dolu günler (tıkla: dolu / müsait)' }), wrap);
 }
 
 function tabBanner() {
@@ -1461,7 +1517,7 @@ function postPreview(focus) {
   if (!f || !S.pvReady || !f.contentWindow) return;
   const tab = TABS.find((x) => x.id === S.tab);
   let fc = focus;
-  if (fc === undefined) fc = tab && tab.focus === 'gate' ? 'gate' : undefined;
+  if (fc === undefined) fc = (tab && tab.focus === 'gate') || (S.pvGate && S.tab === 'type') ? 'gate' : undefined;
   if (fc === null) fc = undefined;
   f.contentWindow.postMessage({ type: 'ay:config', cfg: previewCfg(), lang: S.pvLang, focus: fc, previewTheme: S.tab === 'themes' ? S.previewTheme : null }, location.origin);
 }

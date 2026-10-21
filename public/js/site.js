@@ -1218,5 +1218,18 @@ if (PREVIEW) {
     renderAll();
     if (logoFx) logoFx.refresh();
   });
+  // the panel points at what a setting changes: those texts get a dashed outline, and if none of
+  // them is on screen the preview goes to the section that has them
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin || !e.data || e.data.type !== 'ay:hl') return;
+    document.querySelectorAll('.ay-hl').forEach((x) => x.classList.remove('ay-hl'));
+    if (!e.data.sel) return;
+    let list = [];
+    try { list = [...document.querySelectorAll(e.data.sel)]; } catch (err) { return; }
+    list.forEach((x) => x.classList.add('ay-hl'));
+    const seen = list.some((x) => { const r = x.getBoundingClientRect(); return r.width > 0 && r.bottom > 0 && r.top < window.innerHeight; });
+    const pnl = !seen && list.length ? list[0].closest('.panel') : null;
+    if (pnl) go(pnl.dataset.id);
+  });
   window.parent.postMessage({ type: 'ay:ready' }, location.origin);
 }

@@ -480,3 +480,18 @@ body.mute-site .sound, body.mute-site .gate-sound, body.mute-site .now { visibil
   .facts li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .facts .v { text-align: left; }
 }
+
+/* each section's own scale for its texts (Yazı boyutları › Her bölüm için ayrıca) */
+.panel .era { font-size: calc(var(--t-era, 12px) * var(--s-era, 1)); }
+.panel .prose, .panel .x-text { font-size: calc(var(--t-body, 16px) * var(--s-body, 1)); }
+.panel .facts .k { font-size: calc(var(--t-k, 13px) * var(--s-k, 1)); }
+.panel .facts .v { font-size: calc(var(--t-v, 15px) * var(--s-v, 1)); }
+.panel .sub-h, .panel .ig-h { font-size: calc(var(--t-sub, 12px) * var(--s-sub, 1)); }
+.panel .x-small, .panel .packages p { font-size: calc(var(--t-small, 14px) * var(--s-small, 1)); }
+.panel .pk-h b { font-size: calc(var(--t-pkn, 20px) * var(--s-pkn, 1)); }
+.panel .pk-p { font-size: calc(var(--t-pkp, 15px) * var(--s-pkp, 1)); }
+.panel .rec .trk-t { font-size: calc(var(--t-rect, 15px) * var(--s-rect, 1)); }
+.panel .copy .mail { font-size: calc(var(--t-mail, 17px) * var(--s-mail, 1)); }
+.panel .btn { font-size: calc(var(--t-btn, 15px) * var(--s-btn, 1)); }
+/* the panel's preview points at what a setting changes */
+.ay-hl { outline: 2px dashed var(--accent) !important; outline-offset: 5px; }
