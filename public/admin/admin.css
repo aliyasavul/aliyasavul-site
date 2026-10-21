@@ -247,11 +247,12 @@ ul.plain { margin: 0 0 14px; padding-left: 18px; color: var(--text); }
 /* ⓘ: what a setting is for, shown when the mouse is on it */
 .tip { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; margin-left: 6px; border: 1px solid var(--line2); border-radius: 50%; font: italic 600 10px/1 Georgia, serif; color: var(--dim); cursor: help; vertical-align: 1px; }
 .tip:hover, .tip:focus-visible { color: var(--accent); border-color: var(--accent); }
-.tip:hover::after, .tip:focus-visible::after {
-  content: attr(data-tip); position: absolute; z-index: 50; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
-  width: max-content; max-width: 260px; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 6px; background: #0b0a09;
-  font: 400 12px/1.45 system-ui, sans-serif; font-style: normal; color: #ece4d6; white-space: normal; text-align: left; pointer-events: none;
+/* the ⓘ's text floats above everything, kept inside the settings column */
+.tipbox {
+  position: fixed; z-index: 1000; max-width: 280px; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 6px; background: #0b0a09;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .5); font: 400 12px/1.45 system-ui, sans-serif; color: #ece4d6; pointer-events: none; opacity: 0; transition: opacity .12s;
 }
+.tipbox.on { opacity: 1; }
 .ty-sec > summary { cursor: pointer; list-style: none; }
 .ty-sec > summary::-webkit-details-marker { display: none; }
 .ty-sec > summary b::before { content: '▸ '; color: var(--dim); }

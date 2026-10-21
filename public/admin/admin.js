@@ -384,6 +384,25 @@ function fRange(path, label, { min = 0, max = 100, step: st = 1, hint = '', fmt 
 }
 // a small ⓘ that shows what a setting is for when the mouse is on it
 const tip = (text) => (text ? h('span', { class: 'tip', tabindex: '0', 'data-tip': text, 'aria-label': text }, 'i') : null);
+// its text is one floating box over everything (the preview included), above the ⓘ (or under it
+// if there is no room), kept inside the column of settings
+const tipBox = h('div', { class: 'tipbox', role: 'tooltip' });
+document.body.append(tipBox);
+function showTip(t) {
+  tipBox.textContent = t.dataset.tip;
+  tipBox.classList.add('on');
+  const r = t.getBoundingClientRect(), b = tipBox.getBoundingClientRect();
+  const ed = ($('#editor') || document.body).getBoundingClientRect();
+  const left = Math.max(ed.left + 8, Math.min(r.left + r.width / 2 - b.width / 2, ed.right - b.width - 8));
+  const top = r.top - b.height - 8 < 8 ? r.bottom + 8 : r.top - b.height - 8;
+  tipBox.style.left = Math.max(8, left) + 'px';
+  tipBox.style.top = top + 'px';
+}
+const hideTip = () => tipBox.classList.remove('on');
+for (const [ev, on] of [['mouseover', true], ['focusin', true], ['mouseout', false], ['focusout', false]]) {
+  document.addEventListener(ev, (e) => { const t = e.target.closest && e.target.closest('.tip'); if (t) { if (on) showTip(t); else hideTip(); } });
+}
+document.addEventListener('scroll', hideTip, true);
 // while the mouse is on a setting, the preview outlines the texts it changes
 function pointsAt(el, sel) {
   if (!sel) return el;
